@@ -12,8 +12,6 @@ void HomeActivity::taskTrampoline(void* param) {
   self->displayTaskLoop();
 }
 
-int HomeActivity::getMenuItemCount() const { return hasContinueReading ? 4 : 3; }
-
 void HomeActivity::onEnter() {
   Activity::onEnter();
 
@@ -22,7 +20,8 @@ void HomeActivity::onEnter() {
   // Check if we have a book to continue reading
   hasContinueReading = !APP_STATE.openEpubPath.empty() && SD.exists(APP_STATE.openEpubPath.c_str());
 
-  selectorIndex = 0;
+  // Start at READ (0) if continue available, otherwise FILES (1)
+  selectorIndex = hasContinueReading ? 0 : 1;
 
   // Trigger first update
   updateRequired = true;
@@ -54,35 +53,33 @@ void HomeActivity::loop() {
   const bool nextPressed =
       inputManager.wasPressed(InputManager::BTN_DOWN) || inputManager.wasPressed(InputManager::BTN_RIGHT);
 
-  const int menuCount = getMenuItemCount();
+  // Sequential navigation: READ(0) -> FILES(1) -> SYNC(2) -> SETUP(3) -> wrap
+  // Skip index 0 if no continue reading
 
   if (inputManager.wasPressed(InputManager::BTN_CONFIRM)) {
-    if (hasContinueReading) {
-      // Menu: Continue Reading, Browse, File transfer, Settings
-      if (selectorIndex == 0) {
-        onContinueReading();
-      } else if (selectorIndex == 1) {
-        onReaderOpen();
-      } else if (selectorIndex == 2) {
-        onFileTransferOpen();
-      } else if (selectorIndex == 3) {
-        onSettingsOpen();
-      }
-    } else {
-      // Menu: Browse, File transfer, Settings
-      if (selectorIndex == 0) {
-        onReaderOpen();
-      } else if (selectorIndex == 1) {
-        onFileTransferOpen();
-      } else if (selectorIndex == 2) {
-        onSettingsOpen();
-      }
+    // Grid positions: 0=Continue/READ, 1=Browse/FILES, 2=Transfer/SYNC, 3=Settings/SETUP
+    if (selectorIndex == 0 && hasContinueReading) {
+      onContinueReading();
+    } else if (selectorIndex == 1) {
+      onReaderOpen();
+    } else if (selectorIndex == 2) {
+      onFileTransferOpen();
+    } else if (selectorIndex == 3) {
+      onSettingsOpen();
     }
   } else if (prevPressed) {
-    selectorIndex = (selectorIndex + menuCount - 1) % menuCount;
+    int newIndex = selectorIndex - 1;
+    if (newIndex < 0) newIndex = 3;
+    // Skip N/A cell if no continue reading
+    if (newIndex == 0 && !hasContinueReading) newIndex = 3;
+    selectorIndex = newIndex;
     updateRequired = true;
   } else if (nextPressed) {
-    selectorIndex = (selectorIndex + 1) % menuCount;
+    int newIndex = selectorIndex + 1;
+    if (newIndex > 3) newIndex = 0;
+    // Skip N/A cell if no continue reading
+    if (newIndex == 0 && !hasContinueReading) newIndex = 1;
+    selectorIndex = newIndex;
     updateRequired = true;
   }
 }
@@ -103,45 +100,60 @@ void HomeActivity::render() const {
   renderer.clearScreen();
 
   const auto pageWidth = renderer.getScreenWidth();
+  const auto pageHeight = renderer.getScreenHeight();
+
   renderer.drawCenteredText(READER_FONT_ID, 10, "CrossPoint Reader", true, BOLD);
 
-  // Draw selection
-  renderer.fillRect(0, 60 + selectorIndex * 30 - 2, pageWidth - 1, 30);
+  // Grid layout constants
+  constexpr int cellWidth = 180;
+  constexpr int cellHeight = 140;
+  constexpr int gapX = 40;
+  constexpr int gapY = 40;
 
-  int menuY = 60;
-  int menuIndex = 0;
+  // Center the 2x2 grid
+  const int gridWidth = cellWidth * 2 + gapX;
+  const int gridHeight = cellHeight * 2 + gapY;
+  const int startX = (pageWidth - gridWidth) / 2;
+  const int startY = (pageHeight - gridHeight) / 2 - 20;
 
-  if (hasContinueReading) {
-    // Extract filename from path for display
-    std::string bookName = APP_STATE.openEpubPath;
-    const size_t lastSlash = bookName.find_last_of('/');
-    if (lastSlash != std::string::npos) {
-      bookName = bookName.substr(lastSlash + 1);
+  // Menu items: READ, FILES, SYNC, SETUP (positions 0-3)
+  const char* labels[] = {"READ", "FILES", "SYNC", "SETUP"};
+
+  for (int i = 0; i < 4; i++) {
+    const int row = i / 2;
+    const int col = i % 2;
+    const int cellX = startX + col * (cellWidth + gapX);
+    const int cellY = startY + row * (cellHeight + gapY);
+
+    const bool isSelected = (selectorIndex == i);
+    const bool isDisabled = (i == 0 && !hasContinueReading);
+
+    if (isDisabled) {
+      // Draw disabled N/A cell (outline only, gray appearance)
+      renderer.drawRect(cellX, cellY, cellWidth, cellHeight, true);
+      // Center "N/A" text in cell
+      const int textWidth = renderer.getTextWidth(READER_FONT_ID, "N/A", BOLD);
+      const int textX = cellX + (cellWidth - textWidth) / 2;
+      const int textY = cellY + cellHeight / 2 - renderer.getFontAscenderSize(READER_FONT_ID) / 2;
+      renderer.drawText(READER_FONT_ID, textX, textY, "N/A", true, BOLD);
+    } else if (isSelected) {
+      // Draw selected cell (filled black with white text)
+      renderer.fillRect(cellX, cellY, cellWidth, cellHeight, true);
+      // Center text in cell
+      const int textWidth = renderer.getTextWidth(READER_FONT_ID, labels[i], BOLD);
+      const int textX = cellX + (cellWidth - textWidth) / 2;
+      const int textY = cellY + cellHeight / 2 - renderer.getFontAscenderSize(READER_FONT_ID) / 2;
+      renderer.drawText(READER_FONT_ID, textX, textY, labels[i], false, BOLD);
+    } else {
+      // Draw unselected cell (outline with black text)
+      renderer.drawRect(cellX, cellY, cellWidth, cellHeight, true);
+      // Center text in cell
+      const int textWidth = renderer.getTextWidth(READER_FONT_ID, labels[i], BOLD);
+      const int textX = cellX + (cellWidth - textWidth) / 2;
+      const int textY = cellY + cellHeight / 2 - renderer.getFontAscenderSize(READER_FONT_ID) / 2;
+      renderer.drawText(READER_FONT_ID, textX, textY, labels[i], true, BOLD);
     }
-    // Remove .epub extension
-    if (bookName.length() > 5 && bookName.substr(bookName.length() - 5) == ".epub") {
-      bookName.resize(bookName.length() - 5);
-    }
-    // Truncate if too long
-    if (bookName.length() > 25) {
-      bookName.resize(22);
-      bookName += "...";
-    }
-    std::string continueLabel = "Continue: " + bookName;
-    renderer.drawText(UI_FONT_ID, 20, menuY, continueLabel.c_str(), selectorIndex != menuIndex);
-    menuY += 30;
-    menuIndex++;
   }
-
-  renderer.drawText(UI_FONT_ID, 20, menuY, "Browse", selectorIndex != menuIndex);
-  menuY += 30;
-  menuIndex++;
-
-  renderer.drawText(UI_FONT_ID, 20, menuY, "File transfer", selectorIndex != menuIndex);
-  menuY += 30;
-  menuIndex++;
-
-  renderer.drawText(UI_FONT_ID, 20, menuY, "Settings", selectorIndex != menuIndex);
 
   renderer.drawButtonHints(UI_FONT_ID, "Back", "Confirm", "Left", "Right");
 
