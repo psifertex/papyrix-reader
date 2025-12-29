@@ -106,12 +106,12 @@ void EpubReaderActivity::loop() {
   }
 
   // Enter chapter selection activity
-  if (inputManager.wasReleased(InputManager::BTN_CONFIRM)) {
+  if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
     // Don't start activity transition while rendering
     xSemaphoreTake(renderingMutex, portMAX_DELAY);
     exitActivity();
     enterNewActivity(new EpubReaderChapterSelectionActivity(
-        this->renderer, this->inputManager, epub, currentSpineIndex,
+        this->renderer, this->mappedInput, epub, currentSpineIndex,
         [this] {
           exitActivity();
           updateRequired = true;
@@ -129,21 +129,21 @@ void EpubReaderActivity::loop() {
   }
 
   // Long press BACK (1s+) goes directly to home
-  if (inputManager.isPressed(InputManager::BTN_BACK) && inputManager.getHeldTime() >= goHomeMs) {
+  if (mappedInput.isPressed(MappedInputManager::Button::Back) && mappedInput.getHeldTime() >= goHomeMs) {
     onGoHome();
     return;
   }
 
   // Short press BACK goes to file selection
-  if (inputManager.wasReleased(InputManager::BTN_BACK) && inputManager.getHeldTime() < goHomeMs) {
+  if (mappedInput.wasReleased(MappedInputManager::Button::Back) && mappedInput.getHeldTime() < goHomeMs) {
     onGoBack();
     return;
   }
 
-  const bool prevReleased =
-      inputManager.wasReleased(InputManager::BTN_UP) || inputManager.wasReleased(InputManager::BTN_LEFT);
-  const bool nextReleased =
-      inputManager.wasReleased(InputManager::BTN_DOWN) || inputManager.wasReleased(InputManager::BTN_RIGHT);
+  const bool prevReleased = mappedInput.wasReleased(MappedInputManager::Button::PageBack) ||
+                            mappedInput.wasReleased(MappedInputManager::Button::Left);
+  const bool nextReleased = mappedInput.wasReleased(MappedInputManager::Button::PageForward) ||
+                            mappedInput.wasReleased(MappedInputManager::Button::Right);
 
   if (!prevReleased && !nextReleased) {
     return;
@@ -157,7 +157,7 @@ void EpubReaderActivity::loop() {
     return;
   }
 
-  const bool skipChapter = inputManager.getHeldTime() > skipChapterMs;
+  const bool skipChapter = mappedInput.getHeldTime() > skipChapterMs;
 
   if (skipChapter) {
     // We don't want to delete the section mid-render, so grab the semaphore
@@ -254,7 +254,7 @@ void EpubReaderActivity::renderScreen() {
     const auto viewportWidth = renderer.getScreenWidth() - orientedMarginLeft - orientedMarginRight;
     const auto viewportHeight = renderer.getScreenHeight() - orientedMarginTop - orientedMarginBottom;
 
-    if (!section->loadCacheMetadata(SETTINGS.getReaderFontId(), lineCompression, SETTINGS.extraParagraphSpacing,
+    if (!section->loadSectionFile(SETTINGS.getReaderFontId(), lineCompression, SETTINGS.extraParagraphSpacing,
                                     viewportWidth, viewportHeight)) {
       Serial.printf("[%lu] [ERS] Cache not found, building...\n", millis());
 
@@ -283,8 +283,6 @@ void EpubReaderActivity::renderScreen() {
         pagesUntilFullRefresh = 0;
       }
 
-      section->setupCacheDir();
-
       // Setup callback - only called for chapters >= 50KB, redraws with progress bar
       auto progressSetup = [this, fontId, boxXWithBar, boxWidthWithBar, boxHeightWithBar, barX, barY] {
         renderer.fillRect(boxXWithBar, boxY, boxWidthWithBar, boxHeightWithBar, false);
@@ -301,7 +299,7 @@ void EpubReaderActivity::renderScreen() {
         renderer.displayBuffer(EInkDisplay::FAST_REFRESH);
       };
 
-      if (!section->persistPageDataToSD(SETTINGS.getReaderFontId(), lineCompression, SETTINGS.extraParagraphSpacing,
+      if (!section->createSectionFile(SETTINGS.getReaderFontId(), lineCompression, SETTINGS.extraParagraphSpacing,
                                         viewportWidth, viewportHeight, progressSetup, progressCallback)) {
         Serial.printf("[%lu] [ERS] Failed to persist page data to SD\n", millis());
         section.reset();
@@ -337,7 +335,7 @@ void EpubReaderActivity::renderScreen() {
   }
 
   {
-    auto p = section->loadPageFromSD();
+    auto p = section->loadPageFromSectionFile();
     if (!p) {
       Serial.printf("[%lu] [ERS] Failed to load page from SD - clearing section cache\n", millis());
       section->clearCache();

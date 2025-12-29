@@ -40,8 +40,12 @@ void FileSelectionActivity::loadFiles() {
 
     if (file.isDirectory()) {
       files.emplace_back(filename + "/");
-    } else if (filename.substr(filename.length() - 5) == ".epub") {
-      files.emplace_back(filename);
+    } else {
+      std::string ext4 = filename.length() >= 4 ? filename.substr(filename.length() - 4) : "";
+      std::string ext5 = filename.length() >= 5 ? filename.substr(filename.length() - 5) : "";
+      if (ext5 == ".epub" || ext5 == ".xtch" || ext4 == ".xtc") {
+        files.emplace_back(filename);
+      }
     }
     file.close();
   }
@@ -85,7 +89,7 @@ void FileSelectionActivity::onExit() {
 
 void FileSelectionActivity::loop() {
   // Long press BACK (1s+) goes to root folder
-  if (inputManager.isPressed(InputManager::BTN_BACK) && inputManager.getHeldTime() >= GO_HOME_MS) {
+  if (mappedInput.isPressed(MappedInputManager::Button::Back) && mappedInput.getHeldTime() >= GO_HOME_MS) {
     if (basepath != "/") {
       basepath = "/";
       loadFiles();
@@ -94,14 +98,14 @@ void FileSelectionActivity::loop() {
     return;
   }
 
-  const bool prevReleased =
-      inputManager.wasReleased(InputManager::BTN_UP) || inputManager.wasReleased(InputManager::BTN_LEFT);
-  const bool nextReleased =
-      inputManager.wasReleased(InputManager::BTN_DOWN) || inputManager.wasReleased(InputManager::BTN_RIGHT);
+  const bool prevReleased = mappedInput.wasReleased(MappedInputManager::Button::Up) ||
+                            mappedInput.wasReleased(MappedInputManager::Button::Left);
+  const bool nextReleased = mappedInput.wasReleased(MappedInputManager::Button::Down) ||
+                            mappedInput.wasReleased(MappedInputManager::Button::Right);
 
-  const bool skipPage = inputManager.getHeldTime() > SKIP_PAGE_MS;
+  const bool skipPage = mappedInput.getHeldTime() > SKIP_PAGE_MS;
 
-  if (inputManager.wasReleased(InputManager::BTN_CONFIRM)) {
+  if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
     if (files.empty()) {
       return;
     }
@@ -114,9 +118,9 @@ void FileSelectionActivity::loop() {
     } else {
       onSelect(basepath + files[selectorIndex]);
     }
-  } else if (inputManager.wasReleased(InputManager::BTN_BACK)) {
+  } else if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
     // Short press: go up one directory, or go home if at root
-    if (inputManager.getHeldTime() < GO_HOME_MS) {
+    if (mappedInput.getHeldTime() < GO_HOME_MS) {
       if (basepath != "/") {
         basepath.replace(basepath.find_last_of('/'), std::string::npos, "");
         if (basepath.empty()) basepath = "/";
@@ -162,10 +166,11 @@ void FileSelectionActivity::render() const {
   renderer.drawCenteredText(READER_FONT_ID, 10, "Books", true, BOLD);
 
   // Help text
-  renderer.drawButtonHints(UI_FONT_ID, "« Home", "Open", "", "");
+  const auto labels = mappedInput.mapLabels("« Home", "Open", "", "");
+  renderer.drawButtonHints(UI_FONT_ID, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   if (files.empty()) {
-    renderer.drawText(UI_FONT_ID, 20, 60, "No EPUBs found");
+    renderer.drawText(UI_FONT_ID, 20, 60, "No books found");
     renderer.displayBuffer();
     return;
   }

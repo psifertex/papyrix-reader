@@ -23,10 +23,10 @@ class HomeActivity final : public Activity {
   void render() const;
 
  public:
-  explicit HomeActivity(GfxRenderer& renderer, InputManager& inputManager,
+  explicit HomeActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
                         const std::function<void()>& onContinueReading, const std::function<void()>& onReaderOpen,
                         const std::function<void()>& onSettingsOpen, const std::function<void()>& onFileTransferOpen)
-      : Activity("Home", renderer, inputManager),
+      : Activity("Home", renderer, mappedInput),
         onContinueReading(onContinueReading),
         onReaderOpen(onReaderOpen),
         onSettingsOpen(onSettingsOpen),

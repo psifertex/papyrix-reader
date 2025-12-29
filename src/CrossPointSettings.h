@@ -32,6 +32,11 @@ class CrossPointSettings {
 
   enum FONT_SIZE { FONT_SMALL = 0, FONT_MEDIUM = 1, FONT_LARGE = 2 };
 
+  // Front button layout options
+  // Default: Back, Confirm, Left, Right
+  // Swapped: Left, Right, Back, Confirm
+  enum FRONT_BUTTON_LAYOUT { BACK_CONFIRM_LEFT_RIGHT = 0, LEFT_RIGHT_BACK_CONFIRM = 1 };
+
   // Sleep screen settings
   uint8_t sleepScreen = DARK;
   // Status bar settings
@@ -46,6 +51,8 @@ class CrossPointSettings {
   // Font size for reading
   // 0 = small (14pt), 1 = normal (16pt, default), 2 = large (18pt)
   uint8_t fontSize = FONT_MEDIUM;
+  // Front button layout
+  uint8_t frontButtonLayout = BACK_CONFIRM_LEFT_RIGHT;
 
   ~CrossPointSettings() = default;
 

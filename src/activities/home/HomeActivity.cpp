@@ -48,15 +48,15 @@ void HomeActivity::onExit() {
 }
 
 void HomeActivity::loop() {
-  const bool prevPressed =
-      inputManager.wasPressed(InputManager::BTN_UP) || inputManager.wasPressed(InputManager::BTN_LEFT);
-  const bool nextPressed =
-      inputManager.wasPressed(InputManager::BTN_DOWN) || inputManager.wasPressed(InputManager::BTN_RIGHT);
+  const bool prevPressed = mappedInput.wasPressed(MappedInputManager::Button::Up) ||
+                           mappedInput.wasPressed(MappedInputManager::Button::Left);
+  const bool nextPressed = mappedInput.wasPressed(MappedInputManager::Button::Down) ||
+                           mappedInput.wasPressed(MappedInputManager::Button::Right);
 
   // Sequential navigation: READ(0) -> FILES(1) -> SYNC(2) -> SETUP(3) -> wrap
   // Skip index 0 if no continue reading
 
-  if (inputManager.wasPressed(InputManager::BTN_CONFIRM)) {
+  if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
     // Grid positions: 0=Continue/READ, 1=Browse/FILES, 2=Transfer/SYNC, 3=Settings/SETUP
     if (selectorIndex == 0 && hasContinueReading) {
       onContinueReading();
@@ -155,7 +155,8 @@ void HomeActivity::render() const {
     }
   }
 
-  renderer.drawButtonHints(UI_FONT_ID, "Back", "Confirm", "Left", "Right");
+  const auto btnLabels = mappedInput.mapLabels("Back", "Confirm", "Left", "Right");
+  renderer.drawButtonHints(UI_FONT_ID, btnLabels.btn1, btnLabels.btn2, btnLabels.btn3, btnLabels.btn4);
 
   renderer.displayBuffer();
 }
