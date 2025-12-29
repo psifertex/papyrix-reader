@@ -3,7 +3,7 @@
 #include <GfxRenderer.h>
 
 #include "config.h"
-#include "images/CrossLarge.h"
+#include "images/PapyrixLogo.h"
 
 void BootActivity::onEnter() {
   Activity::onEnter();
@@ -12,9 +12,9 @@ void BootActivity::onEnter() {
   const auto pageHeight = renderer.getScreenHeight();
 
   renderer.clearScreen();
-  renderer.drawImage(CrossLarge, (pageWidth + 128) / 2, (pageHeight - 128) / 2, 128, 128);
+  renderer.drawImage(PapyrixLogo, (pageWidth + 128) / 2, (pageHeight - 128) / 2, 128, 128);
   renderer.drawCenteredText(UI_FONT_ID, pageHeight / 2 + 70, "Papyrix", true, BOLD);
-  renderer.drawCenteredText(SMALL_FONT_ID, pageHeight / 2 + 95, "BOOTING");
+  renderer.drawCenteredText(SMALL_FONT_ID, pageHeight / 2 + 110, "BOOTING");
   renderer.drawCenteredText(SMALL_FONT_ID, pageHeight - 30, CROSSPOINT_VERSION);
   renderer.displayBuffer();
 }

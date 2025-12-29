@@ -11,7 +11,7 @@
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "config.h"
-#include "images/CrossLarge.h"
+#include "images/PapyrixLogo.h"
 
 namespace {
 // Check if path has XTC extension (.xtc or .xtch)
@@ -127,9 +127,9 @@ void SleepActivity::renderDefaultSleepScreen() const {
   const auto pageHeight = renderer.getScreenHeight();
 
   renderer.clearScreen();
-  renderer.drawImage(CrossLarge, (pageWidth + 128) / 2, (pageHeight - 128) / 2, 128, 128);
+  renderer.drawImage(PapyrixLogo, (pageWidth + 128) / 2, (pageHeight - 128) / 2, 128, 128);
   renderer.drawCenteredText(UI_FONT_ID, pageHeight / 2 + 70, "Papyrix", true, BOLD);
-  renderer.drawCenteredText(SMALL_FONT_ID, pageHeight / 2 + 95, "SLEEPING");
+  renderer.drawCenteredText(SMALL_FONT_ID, pageHeight / 2 + 110, "SLEEPING");
 
   // Make sleep screen dark unless light is selected in settings
   if (SETTINGS.sleepScreen != CrossPointSettings::SLEEP_SCREEN_MODE::LIGHT) {
