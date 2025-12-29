@@ -1,6 +1,6 @@
-# CrossPoint User Guide
+# Papyrix User Guide
 
-Welcome to the **CrossPoint** firmware. This guide outlines the hardware controls, navigation, and reading features of 
+Welcome to the **Papyrix** firmware. This guide outlines the hardware controls, navigation, and reading features of
 the device.
 
 ## 1. Hardware Overview
@@ -34,40 +34,74 @@ Upon turning the device on for the first time, you will be placed on the **Home*
 
 ### 3.1 Home Screen
 
-The Home Screen is the main entry point to the firmware. From here you can navigate to the **Book Selection** screen,
-**Settings** screen, or **File Upload** screen.
+The Home Screen uses a **2x2 grid layout** with four options:
 
-### 3.2 Book Selection (Read)
+- **READ** (top-left) — Continue reading your last book (shows "N/A" if no book loaded)
+- **FILES** (top-right) — Browse and select books from the SD card
+- **SYNC** (bottom-left) — File transfer via WiFi web server
+- **SETUP** (bottom-right) — Device settings
 
-The Book Selection acts as a folder and file browser.
+**Navigation:**
+* Use **Left/Right** or **Volume Up/Down** to move between options
+* Press **Confirm** to select an option
 
-* **Navigate List:** Use **Left** (or **Volume Up**), or **Right** (or **Volume Down**) to move the selection cursor up 
+### 3.2 Book Selection (Files)
+
+The Files screen acts as a folder and file browser.
+
+* **Navigate List:** Use **Left** (or **Volume Up**), or **Right** (or **Volume Down**) to move the selection cursor up
   and down through folders and books.
 * **Open Selection:** Press **Confirm** to open a folder or read a selected book.
+
+> **Note:** Both EPUB (.epub) and XTC (.xtc, .xtch) file formats are supported.
 
 ### 3.3 Reading Screen
 
 See [4. Reading Mode](#4-reading-mode) below for more information.
 
-### 3.4 File Upload Screen
+### 3.4 File Transfer (Sync)
 
-The File Upload screen allows you to upload new e-books to the device. When you enter the screen you'll be prompted with
-a WiFi selection dialog and then your X4 will start hosting a web server.
+The Sync screen allows you to upload new e-books to the device over WiFi.
 
-See the [webserver docs](./docs/webserver.md) for more information on how to connect to the web server and upload files.
+When you enter the screen, you'll be prompted to choose a network mode:
+
+* **Join Network:** Connect to an existing WiFi network. You'll see a list of available networks and can enter passwords as needed. Previously saved networks will connect automatically.
+* **Create Hotspot:** The X4 creates its own WiFi network that you can connect to directly from your computer or phone.
+
+Once connected, your X4 will start hosting a web server. See the [webserver docs](./docs/webserver.md) for more
+information on how to connect and upload files.
 
 ### 3.5 Settings
 
-The Settings screen allows you to configure the device's behavior. There are a few settings you can adjust:
-- **Sleep Screen**: Which sleep screen to display when the device sleeps, options are:
-  - "Dark" (default) - The default dark sleep screen
-  - "Light" - The same default sleep screen, on a white background
-  - "Custom" - Custom images from the SD card, see [3.6 Sleep Screen](#36-sleep-screen) below for more information
-  - "Cover" - The book cover image (Note: this is experimental and may not work as expected)
-- **Extra Paragraph Spacing**: If enabled, vertical space will be added between paragraphs in the book, if disabled,
-  paragraphs will not have vertical space between them, but will have first word indentation.
-- **Short Power Button Click**: Whether to trigger the power button on a short press or a long press.
-- **Front Button Layout**: Swap the order of the bottom edge buttons from Back/Confirm/Left/Right to Left/Right/Back/Confirm.
+The Settings screen allows you to configure the device's behavior:
+
+- **Sleep Screen** (default: Dark)
+  - Options: Dark, Light, Custom, Cover
+  - Which image to display when the device sleeps
+
+- **Status Bar** (default: Full)
+  - Options: None, No Progress, Full
+  - Status bar display during reading
+
+- **Extra Paragraph Spacing** (default: ON)
+  - Add vertical space between paragraphs (OFF uses first-line indentation instead)
+
+- **Font Size** (default: Normal)
+  - Options: Small (14pt), Normal (16pt), Large (18pt)
+  - Text size for reading
+
+- **Short Power Button Click** (default: OFF)
+  - Whether to trigger power on a short press (ON) or long press (OFF)
+
+- **Reading Orientation** (default: Portrait)
+  - Options: Portrait, Landscape CW, Inverted, Landscape CCW
+  - Screen orientation for reading
+
+- **Front Button Layout** (default: Default)
+  - Options: Default (Back/Confirm/Left/Right), Swapped (Left/Right/Back/Confirm)
+
+- **Check for updates**
+  - Check for and install firmware updates via WiFi
 
 ### 3.6 Sleep Screen
 
@@ -75,16 +109,28 @@ You can customize the sleep screen by placing custom images in specific location
 
 - **Single Image:** Place a file named `sleep.bmp` in the root directory.
 - **Multiple Images:** Create a `sleep` directory in the root of the SD card and place any number of `.bmp` images
-  inside. If images are found in this directory, they will take priority over the `sleep.png` file, and one will be
+  inside. If images are found in this directory, they will take priority over the `sleep.bmp` file, and one will be
   randomly selected each time the device sleeps.
 
 > [!NOTE]
 > You'll need to set the **Sleep Screen** setting to **Custom** in order to use these images.
 
+#### Image Parameters
+
+| Parameter | Recommended Value |
+|-----------|-------------------|
+| Resolution | 480 × 800 pixels (portrait mode) |
+| Color depth | 8-bit grayscale or 24-bit color |
+| Format | BMP, uncompressed (BI_RGB) |
+| Display levels | 4 grayscale (black, dark gray, light gray, white) |
+
 > [!TIP]
-> For best results:
-> - Use uncompressed BMP files with 24-bit color depth
-> - Use a resolution of 480x800 pixels to match the device's screen resolution.
+> - Use 8-bit grayscale for best results - it's widely supported by image editors
+> - Larger images will be automatically scaled down while preserving aspect ratio
+> - All color images are converted to 4-level grayscale on the e-ink display
+
+> [!WARNING]
+> The **Cover** sleep screen option is experimental and may not work as expected with all books.
 
 ---
 
@@ -124,5 +170,3 @@ Please note that this firmware is currently in active development. The following
 are planned for future updates:
 
 * **Images:** Embedded images in e-books will not render.
-* **Text Formatting:** There are currently no settings to adjust font type, size, line spacing, or margins.
-* **Rotation**: Different rotation options are not supported.
