@@ -56,8 +56,7 @@ build-fs: ## Build filesystem image
 upload-fs: ## Upload filesystem to device
 	pio run --target uploadfs
 
-## Release:
-
+# Release
 tag: ## Create and push a version tag (triggers GitHub release)
 	@read -p "Enter tag version (e.g., 1.0.0): " TAG; \
 	if [[ $$TAG =~ ^[0-9]+\.[0-9]+\.[0-9]+$$ ]]; then \

@@ -419,8 +419,8 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int or
 
 void EpubReaderActivity::renderCoverPage(const int orientedMarginTop, const int orientedMarginRight,
                                          const int orientedMarginBottom, const int orientedMarginLeft) {
-  File coverFile;
-  if (!FsHelpers::openFileForRead("ERS", epub->getCoverBmpPath(), coverFile)) {
+  FsFile coverFile;
+  if (!SdMan.openFileForRead("ERS", epub->getCoverBmpPath(), coverFile)) {
     Serial.printf("[%lu] [ERS] Failed to open cover BMP\n", millis());
     renderer.drawCenteredText(SETTINGS.getReaderFontId(), 300, "Cover unavailable", true, BOLD);
     renderStatusBar(orientedMarginRight, orientedMarginBottom, orientedMarginLeft);
