@@ -186,7 +186,7 @@ void XtcReaderActivity::renderPage() {
   if (bitDepth == 2) {
     pageBufferSize = ((static_cast<size_t>(pageWidth) * pageHeight + 7) / 8) * 2;
   } else {
-    pageBufferSize = ((pageWidth + 7) / 8) * pageHeight;
+    pageBufferSize = static_cast<size_t>((pageWidth + 7) / 8) * pageHeight;
   }
 
   // Allocate page buffer

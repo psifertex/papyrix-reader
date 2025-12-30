@@ -74,36 +74,41 @@ bool OtaUpdater::isUpdateNewer() {
     return false;
   }
 
-  // semantic version check (only match on 3 segments)
-  const auto updateMajor = stoi(latestVersion.substr(0, latestVersion.find('.')));
-  const auto updateMinor = stoi(
-      latestVersion.substr(latestVersion.find('.') + 1, latestVersion.find_last_of('.') - latestVersion.find('.') - 1));
-  const auto updatePatch = stoi(latestVersion.substr(latestVersion.find_last_of('.') + 1));
+  try {
+    // semantic version check (only match on 3 segments)
+    const auto updateMajor = stoi(latestVersion.substr(0, latestVersion.find('.')));
+    const auto updateMinor = stoi(
+        latestVersion.substr(latestVersion.find('.') + 1, latestVersion.find_last_of('.') - latestVersion.find('.') - 1));
+    const auto updatePatch = stoi(latestVersion.substr(latestVersion.find_last_of('.') + 1));
 
-  std::string currentVersion = CROSSPOINT_VERSION;
-  const auto currentMajor = stoi(currentVersion.substr(0, currentVersion.find('.')));
-  const auto currentMinor = stoi(currentVersion.substr(
-      currentVersion.find('.') + 1, currentVersion.find_last_of('.') - currentVersion.find('.') - 1));
-  const auto currentPatch = stoi(currentVersion.substr(currentVersion.find_last_of('.') + 1));
+    std::string currentVersion = CROSSPOINT_VERSION;
+    const auto currentMajor = stoi(currentVersion.substr(0, currentVersion.find('.')));
+    const auto currentMinor = stoi(currentVersion.substr(
+        currentVersion.find('.') + 1, currentVersion.find_last_of('.') - currentVersion.find('.') - 1));
+    const auto currentPatch = stoi(currentVersion.substr(currentVersion.find_last_of('.') + 1));
 
-  if (updateMajor > currentMajor) {
-    return true;
-  }
-  if (updateMajor < currentMajor) {
+    if (updateMajor > currentMajor) {
+      return true;
+    }
+    if (updateMajor < currentMajor) {
+      return false;
+    }
+
+    if (updateMinor > currentMinor) {
+      return true;
+    }
+    if (updateMinor < currentMinor) {
+      return false;
+    }
+
+    if (updatePatch > currentPatch) {
+      return true;
+    }
+    return false;
+  } catch (const std::exception& e) {
+    Serial.printf("[%lu] [OTA] Version parse error: %s\n", millis(), e.what());
     return false;
   }
-
-  if (updateMinor > currentMinor) {
-    return true;
-  }
-  if (updateMinor < currentMinor) {
-    return false;
-  }
-
-  if (updatePatch > currentPatch) {
-    return true;
-  }
-  return false;
 }
 
 const std::string& OtaUpdater::getLatestVersion() { return latestVersion; }

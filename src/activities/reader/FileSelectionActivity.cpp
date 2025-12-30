@@ -132,14 +132,14 @@ void FileSelectionActivity::loop() {
         onGoHome();
       }
     }
-  } else if (prevReleased) {
+  } else if (prevReleased && !files.empty()) {
     if (skipPage) {
       selectorIndex = ((selectorIndex / PAGE_ITEMS - 1) * PAGE_ITEMS + files.size()) % files.size();
     } else {
       selectorIndex = (selectorIndex + files.size() - 1) % files.size();
     }
     updateRequired = true;
-  } else if (nextReleased) {
+  } else if (nextReleased && !files.empty()) {
     if (skipPage) {
       selectorIndex = ((selectorIndex / PAGE_ITEMS + 1) * PAGE_ITEMS) % files.size();
     } else {
