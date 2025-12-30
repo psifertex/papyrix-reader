@@ -1,7 +1,7 @@
 # Makefile for Papyrix Reader firmware
 # Wraps PlatformIO commands for convenience
 
-.PHONY: all build build-release upload upload-release flash flash-release \
+.PHONY: all build build-release release upload upload-release flash flash-release \
         clean format check monitor size erase build-fs upload-fs sleep-screen help
 
 # Default target
@@ -13,6 +13,8 @@ build: ## Build firmware (default environment)
 
 build-release: ## Build release firmware
 	pio run -e gh_release
+
+release: build-release ## Alias for build-release
 
 # Upload targets
 upload: ## Build and flash to device
@@ -53,6 +55,19 @@ build-fs: ## Build filesystem image
 
 upload-fs: ## Upload filesystem to device
 	pio run --target uploadfs
+
+## Release:
+
+tag: ## Create and push a version tag (triggers GitHub release)
+	@read -p "Enter tag version (e.g., 1.0.0): " TAG; \
+	if [[ $$TAG =~ ^[0-9]+\.[0-9]+\.[0-9]+$$ ]]; then \
+		git tag -a v$$TAG -m "v$$TAG"; \
+		git push origin v$$TAG; \
+		echo "Tag v$$TAG created and pushed successfully."; \
+	else \
+		echo "Invalid tag format. Please use X.Y.Z (e.g., 1.0.0)"; \
+		exit 1; \
+	fi
 
 # Image conversion
 sleep-screen: ## Convert image to sleep screen BMP

@@ -83,6 +83,9 @@ git submodule update --init --recursive
 # Build firmware
 make build
 
+# Build release firmware
+make release
+
 # Or using PlatformIO directly
 pio run
 ```
