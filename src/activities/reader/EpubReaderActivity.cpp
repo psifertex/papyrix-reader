@@ -217,7 +217,6 @@ void EpubReaderActivity::displayTaskLoop() {
   }
 }
 
-// TODO: Failure handling
 void EpubReaderActivity::renderScreen() {
   if (!epub) {
     return;
@@ -305,6 +304,11 @@ void EpubReaderActivity::renderScreen() {
                                         viewportWidth, viewportHeight, progressSetup, progressCallback)) {
         Serial.printf("[%lu] [ERS] Failed to persist page data to SD\n", millis());
         section.reset();
+        // Show error message to user
+        renderer.clearScreen();
+        renderer.drawCenteredText(SETTINGS.getReaderFontId(), 300, "Failed to load chapter", true, BOLD);
+        renderStatusBar(orientedMarginRight, orientedMarginBottom, orientedMarginLeft);
+        renderer.displayBuffer();
         return;
       }
     } else {
@@ -573,6 +577,9 @@ void EpubReaderActivity::renderStatusBar(const int orientedMarginRight, const in
       title = tocItem.title;
       titleWidth = renderer.getTextWidth(SMALL_FONT_ID, title.c_str());
       while (titleWidth > availableTextWidth && title.length() > 11) {
+        if (title.length() < 8) {
+          break;  // Safety check to prevent underflow
+        }
         title.replace(title.length() - 8, 8, "...");
         titleWidth = renderer.getTextWidth(SMALL_FONT_ID, title.c_str());
       }
