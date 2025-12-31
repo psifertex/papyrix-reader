@@ -157,9 +157,12 @@ void OtaUpdateActivity::render() {
     renderer.drawCenteredText(THEME.uiFontId, 310, "Updating...", THEME.primaryTextBlack, BOLD);
     renderer.drawRect(20, 350, pageWidth - 40, 50, THEME.primaryTextBlack);
     renderer.fillRect(24, 354, static_cast<int>(updaterProgress * static_cast<float>(pageWidth - 44)), 42, THEME.primaryTextBlack);
-    renderer.drawCenteredText(THEME.uiFontId, 420, (std::to_string(static_cast<int>(updaterProgress * 100)) + "%").c_str(), THEME.primaryTextBlack);
-    renderer.drawCenteredText(
-        THEME.uiFontId, 440, (std::to_string(updater.processedSize) + " / " + std::to_string(updater.totalSize)).c_str(), THEME.primaryTextBlack);
+    char progressStr[8];
+    snprintf(progressStr, sizeof(progressStr), "%d%%", static_cast<int>(updaterProgress * 100));
+    renderer.drawCenteredText(THEME.uiFontId, 420, progressStr, THEME.primaryTextBlack);
+    char sizeStr[32];
+    snprintf(sizeStr, sizeof(sizeStr), "%zu / %zu", updater.processedSize, updater.totalSize);
+    renderer.drawCenteredText(THEME.uiFontId, 440, sizeStr, THEME.primaryTextBlack);
     renderer.displayBuffer();
     return;
   }

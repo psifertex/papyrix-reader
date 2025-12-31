@@ -1,6 +1,7 @@
 #include "ThemeManager.h"
 #include "IniParser.h"
 #include <SDCardManager.h>
+#include <algorithm>
 #include <cstring>
 
 static const char* THEMES_DIR = "/themes";
@@ -208,14 +209,8 @@ std::vector<std::string> ThemeManager::listAvailableThemes() {
         themeNameBuf[nameLen] = '\0';
 
         // Add if not already in list (avoid duplicating light/dark)
-        bool found = false;
-        for (const auto& t : themes) {
-          if (t == themeNameBuf) {
-            found = true;
-            break;
-          }
-        }
-        if (!found) {
+        if (!std::any_of(themes.begin(), themes.end(),
+                         [&](const std::string& t) { return t == themeNameBuf; })) {
           themes.push_back(themeNameBuf);
         }
       }

@@ -74,41 +74,27 @@ bool OtaUpdater::isUpdateNewer() {
     return false;
   }
 
-  try {
-    // semantic version check (only match on 3 segments)
-    const auto updateMajor = stoi(latestVersion.substr(0, latestVersion.find('.')));
-    const auto updateMinor = stoi(
-        latestVersion.substr(latestVersion.find('.') + 1, latestVersion.find_last_of('.') - latestVersion.find('.') - 1));
-    const auto updatePatch = stoi(latestVersion.substr(latestVersion.find_last_of('.') + 1));
+  // Parse versions using sscanf (more efficient than substr + stoi chains)
+  int updateMajor = 0, updateMinor = 0, updatePatch = 0;
+  int currentMajor = 0, currentMinor = 0, currentPatch = 0;
 
-    std::string currentVersion = CROSSPOINT_VERSION;
-    const auto currentMajor = stoi(currentVersion.substr(0, currentVersion.find('.')));
-    const auto currentMinor = stoi(currentVersion.substr(
-        currentVersion.find('.') + 1, currentVersion.find_last_of('.') - currentVersion.find('.') - 1));
-    const auto currentPatch = stoi(currentVersion.substr(currentVersion.find_last_of('.') + 1));
-
-    if (updateMajor > currentMajor) {
-      return true;
-    }
-    if (updateMajor < currentMajor) {
-      return false;
-    }
-
-    if (updateMinor > currentMinor) {
-      return true;
-    }
-    if (updateMinor < currentMinor) {
-      return false;
-    }
-
-    if (updatePatch > currentPatch) {
-      return true;
-    }
-    return false;
-  } catch (const std::exception& e) {
-    Serial.printf("[%lu] [OTA] Version parse error: %s\n", millis(), e.what());
+  if (sscanf(latestVersion.c_str(), "%d.%d.%d", &updateMajor, &updateMinor, &updatePatch) != 3) {
+    Serial.printf("[%lu] [OTA] Failed to parse update version: %s\n", millis(), latestVersion.c_str());
     return false;
   }
+
+  if (sscanf(CROSSPOINT_VERSION, "%d.%d.%d", &currentMajor, &currentMinor, &currentPatch) != 3) {
+    Serial.printf("[%lu] [OTA] Failed to parse current version: %s\n", millis(), CROSSPOINT_VERSION);
+    return false;
+  }
+
+  if (updateMajor != currentMajor) {
+    return updateMajor > currentMajor;
+  }
+  if (updateMinor != currentMinor) {
+    return updateMinor > currentMinor;
+  }
+  return updatePatch > currentPatch;
 }
 
 const std::string& OtaUpdater::getLatestVersion() { return latestVersion; }

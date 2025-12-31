@@ -58,5 +58,5 @@ public:
 
 private:
   static void trimWhitespace(char* str);
-  static bool parseLine(char* line, const char* currentSection, Callback& callback);
+  static bool parseLine(char* line, const char* currentSection, const Callback& callback);
 };

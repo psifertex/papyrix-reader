@@ -530,19 +530,20 @@ void EpubReaderActivity::renderStatusBar(const int orientedMarginRight, const in
     const uint8_t bookProgress = epub->calculateProgress(currentSpineIndex, sectionChapterProg);
 
     // Right aligned text for progress counter
-    const std::string progress = std::to_string(section->currentPage + 1) + "/" + std::to_string(section->pageCount) +
-                                 "  " + std::to_string(bookProgress) + "%";
-    progressTextWidth = renderer.getTextWidth(THEME.smallFontId, progress.c_str());
+    char progress[32];
+    snprintf(progress, sizeof(progress), "%d/%d  %u%%", section->currentPage + 1, section->pageCount, bookProgress);
+    progressTextWidth = renderer.getTextWidth(THEME.smallFontId, progress);
     renderer.drawText(THEME.smallFontId, renderer.getScreenWidth() - orientedMarginRight - progressTextWidth, textY,
-                      progress.c_str(), THEME.primaryTextBlack);
+                      progress, THEME.primaryTextBlack);
   }
 
   if (showBattery) {
     // Left aligned battery icon and percentage
     const uint16_t percentage = battery.readPercentage();
-    const auto percentageText = std::to_string(percentage) + "%";
-    percentageTextWidth = renderer.getTextWidth(THEME.smallFontId, percentageText.c_str());
-    renderer.drawText(THEME.smallFontId, 20 + orientedMarginLeft, textY, percentageText.c_str(), THEME.primaryTextBlack);
+    char percentageText[8];
+    snprintf(percentageText, sizeof(percentageText), "%u%%", percentage);
+    percentageTextWidth = renderer.getTextWidth(THEME.smallFontId, percentageText);
+    renderer.drawText(THEME.smallFontId, 20 + orientedMarginLeft, textY, percentageText, THEME.primaryTextBlack);
 
     // 1 column on left, 2 columns on right, 5 columns of battery body
     constexpr int batteryWidth = 15;
@@ -588,9 +589,6 @@ void EpubReaderActivity::renderStatusBar(const int orientedMarginRight, const in
       title = tocItem.title;
       titleWidth = renderer.getTextWidth(THEME.smallFontId, title.c_str());
       while (titleWidth > availableTextWidth && title.length() > 11) {
-        if (title.length() < 8) {
-          break;  // Safety check to prevent underflow
-        }
         title.replace(title.length() - 8, 8, "...");
         titleWidth = renderer.getTextWidth(THEME.smallFontId, title.c_str());
       }

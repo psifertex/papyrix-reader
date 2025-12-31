@@ -2,9 +2,9 @@
 #include <EpdFontFamily.h>
 #include <SdFat.h>
 
-#include <list>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "Block.h"
 
@@ -18,20 +18,23 @@ class TextBlock final : public Block {
     RIGHT_ALIGN = 3,
   };
 
+  struct WordData {
+    std::string word;
+    uint16_t xPos;
+    EpdFontFamily::Style style;
+  };
+
  private:
-  std::list<std::string> words;
-  std::list<uint16_t> wordXpos;
-  std::list<EpdFontFamily::Style> wordStyles;
+  std::vector<WordData> wordData;
   BLOCK_STYLE style;
 
  public:
-  explicit TextBlock(std::list<std::string> words, std::list<uint16_t> word_xpos, std::list<EpdFontFamily::Style> word_styles,
-                     const BLOCK_STYLE style)
-      : words(std::move(words)), wordXpos(std::move(word_xpos)), wordStyles(std::move(word_styles)), style(style) {}
+  explicit TextBlock(std::vector<WordData> data, const BLOCK_STYLE style)
+      : wordData(std::move(data)), style(style) {}
   ~TextBlock() override = default;
   void setStyle(const BLOCK_STYLE style) { this->style = style; }
   BLOCK_STYLE getStyle() const { return style; }
-  bool isEmpty() override { return words.empty(); }
+  bool isEmpty() override { return wordData.empty(); }
   void layout(GfxRenderer& renderer) override {};
   // given a renderer works out where to break the words into lines
   void render(const GfxRenderer& renderer, int fontId, int x, int y, bool black = true) const;

@@ -68,7 +68,8 @@ std::vector<size_t> ParsedText::computeLineBreaks(const int pageWidth, const int
   // DP table to store the minimum badness (cost) of lines starting at index i
   std::vector<int> dp(totalWordCount);
   // 'ans[i]' stores the index 'j' of the *last word* in the optimal line starting at 'i'
-  std::vector<size_t> ans(totalWordCount);
+  // Using uint16_t saves memory (was size_t/4 bytes on ESP32, now 2 bytes per word)
+  std::vector<uint16_t> ans(totalWordCount);
 
   // Base Case
   dp[totalWordCount - 1] = 0;
@@ -171,25 +172,23 @@ void ParsedText::extractLine(const size_t breakIndex, const int pageWidth, const
     xpos = (spareSpace - (lineWordCount - 1) * spaceWidth) / 2;
   }
 
-  // Pre-calculate X positions for words
-  std::list<uint16_t> lineXPos;
+  // Build WordData vector directly, consuming from front of lists
+  std::vector<TextBlock::WordData> lineData;
+  lineData.reserve(lineWordCount);
+
+  auto wordIt = words.begin();
+  auto styleIt = wordStyles.begin();
   for (size_t i = lastBreakAt; i < lineBreak; i++) {
     const uint16_t currentWordWidth = wordWidths[i];
-    lineXPos.push_back(xpos);
+    lineData.push_back({std::move(*wordIt), xpos, *styleIt});
     xpos += currentWordWidth + spacing;
+    ++wordIt;
+    ++styleIt;
   }
 
-  // Iterators always start at the beginning as we are moving content with splice below
-  auto wordEndIt = words.begin();
-  auto wordStyleEndIt = wordStyles.begin();
-  std::advance(wordEndIt, lineWordCount);
-  std::advance(wordStyleEndIt, lineWordCount);
+  // Remove consumed elements from lists
+  words.erase(words.begin(), wordIt);
+  wordStyles.erase(wordStyles.begin(), styleIt);
 
-  // *** CRITICAL STEP: CONSUME DATA USING SPLICE ***
-  std::list<std::string> lineWords;
-  lineWords.splice(lineWords.begin(), words, words.begin(), wordEndIt);
-  std::list<EpdFontFamily::Style> lineWordStyles;
-  lineWordStyles.splice(lineWordStyles.begin(), wordStyles, wordStyles.begin(), wordStyleEndIt);
-
-  processLine(std::make_shared<TextBlock>(std::move(lineWords), std::move(lineXPos), std::move(lineWordStyles), style));
+  processLine(std::make_shared<TextBlock>(std::move(lineData), style));
 }

@@ -87,7 +87,7 @@ bool IniParser::parseString(const char* content, Callback callback) {
   return true;
 }
 
-bool IniParser::parseLine(char* line, const char* currentSection, Callback& callback) {
+bool IniParser::parseLine(char* line, const char* currentSection, const Callback& callback) {
   // Skip comments and empty lines
   if (line[0] == '#' || line[0] == ';' || line[0] == '\0') {
     return true;
