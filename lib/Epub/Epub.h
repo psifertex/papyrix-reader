@@ -40,6 +40,7 @@ class Epub {
   const std::string& getCachePath() const;
   const std::string& getPath() const;
   const std::string& getTitle() const;
+  const std::string& getAuthor() const;
   std::string getCoverBmpPath() const;
   bool generateCoverBmp() const;
   uint8_t* readItemContentsToBytes(const std::string& itemHref, size_t* size = nullptr,
@@ -53,6 +54,7 @@ class Epub {
   int getSpineIndexForTocIndex(int tocIndex) const;
   int getTocIndexForSpineIndex(int spineIndex) const;
   size_t getCumulativeSpineItemSize(int spineIndex) const;
+  int getSpineIndexForTextReference() const;
 
   size_t getBookSize() const;
   uint8_t calculateProgress(int currentSpineIndex, float currentSpineRead) const;
