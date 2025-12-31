@@ -10,7 +10,7 @@
 
 // Define the static settings list
 namespace {
-constexpr int settingsCount = 10;
+constexpr int settingsCount = 11;
 const SettingInfo settingsList[settingsCount] = {
     // Theme selection (special type - handled dynamically)
     {"Theme", SettingType::THEME_SELECT, nullptr, {}},
@@ -21,6 +21,7 @@ const SettingInfo settingsList[settingsCount] = {
     // Should match with FONT_SIZE
     {"Font Size", SettingType::ENUM, &CrossPointSettings::fontSize, {"Small", "Normal", "Large"}},
     {"Show Book Cover", SettingType::TOGGLE, &CrossPointSettings::showBookCover, {}},
+    {"Show Book Info", SettingType::TOGGLE, &CrossPointSettings::showBookMetadata, {}},
     {"Short Power Button Click", SettingType::TOGGLE, &CrossPointSettings::shortPwrBtn, {}},
     {"Reading Orientation",
      SettingType::ENUM,
@@ -212,8 +213,12 @@ void SettingsActivity::render() const {
       const uint8_t value = SETTINGS.*(settingsList[i].valuePtr);
       valueText = settingsList[i].enumValues[value];
     } else if (settingsList[i].type == SettingType::THEME_SELECT) {
-      // Show current theme name
-      valueText = SETTINGS.themeName;
+      // Show current theme display name (or filename if no display name set)
+      if (THEME.displayName[0] != '\0') {
+        valueText = THEME.displayName;
+      } else {
+        valueText = SETTINGS.themeName;
+      }
     }
     const auto width = renderer.getTextWidth(THEME.uiFontId, valueText.c_str());
     renderer.drawText(THEME.uiFontId, pageWidth - 20 - width, settingY, valueText.c_str(), textColor);

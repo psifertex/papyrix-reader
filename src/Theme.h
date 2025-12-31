@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstring>
 #include "config.h"
 
 // Front button layout options
@@ -20,6 +21,9 @@ enum HomeLayout { HOME_GRID = 0, HOME_LIST = 1 };
  * - false = white (inverted/background color)
  */
 struct Theme {
+  // Theme metadata
+  char displayName[32];       // Human-readable name for settings UI
+
   // Color scheme
   bool invertedMode;          // Global dark/light mode (true = dark background)
 
@@ -61,6 +65,7 @@ struct Theme {
  */
 inline Theme getBuiltinLightTheme() {
   Theme theme = {};
+  strncpy(theme.displayName, "Light", sizeof(theme.displayName));
   theme.invertedMode = false;
   theme.selectionFillBlack = true;
   theme.selectionTextBlack = false;
@@ -88,6 +93,7 @@ inline Theme getBuiltinLightTheme() {
  */
 inline Theme getBuiltinDarkTheme() {
   Theme theme = {};
+  strncpy(theme.displayName, "Dark", sizeof(theme.displayName));
   theme.invertedMode = true;
   theme.selectionFillBlack = false;
   theme.selectionTextBlack = true;

@@ -50,7 +50,7 @@ This project is **not affiliated with Xteink**; it's built as a community projec
   - [x] Cover sleep screen
 - [x] Book cover display when reading
 - [x] Wifi book upload
-- [ ] Wifi OTA updates
+- [x] Wifi OTA updates
 - [x] Configurable font size options
 - [x] Custom themes (colors, layout, button mapping)
 - [x] Custom fonts from SD card

@@ -1,5 +1,6 @@
 #include "HomeActivity.h"
 
+#include <Epub.h>
 #include <GfxRenderer.h>
 #include <SDCardManager.h>
 
@@ -21,6 +22,41 @@ void HomeActivity::onEnter() {
 
   // Check if we have a book to continue reading
   hasContinueReading = !APP_STATE.openEpubPath.empty() && SdMan.exists(APP_STATE.openEpubPath.c_str());
+
+  // Load book metadata if enabled and we have a book to continue
+  lastBookTitle.clear();
+  lastBookAuthor.clear();
+  if (hasContinueReading) {
+    // Extract filename as fallback
+    lastBookTitle = APP_STATE.openEpubPath;
+    const size_t lastSlash = lastBookTitle.find_last_of('/');
+    if (lastSlash != std::string::npos) {
+      lastBookTitle = lastBookTitle.substr(lastSlash + 1);
+    }
+
+    // Check file extension and try to load metadata
+    const std::string ext5 = lastBookTitle.length() >= 5 ? lastBookTitle.substr(lastBookTitle.length() - 5) : "";
+    const std::string ext4 = lastBookTitle.length() >= 4 ? lastBookTitle.substr(lastBookTitle.length() - 4) : "";
+
+    if (ext5 == ".epub" && SETTINGS.showBookMetadata) {
+      // Try to load EPUB metadata from cache (don't build if missing)
+      Epub epub(APP_STATE.openEpubPath, "/.crosspoint");
+      if (epub.load(false)) {
+        if (!epub.getTitle().empty()) {
+          lastBookTitle = std::string(epub.getTitle());
+        }
+        if (!epub.getAuthor().empty()) {
+          lastBookAuthor = std::string(epub.getAuthor());
+        }
+      }
+    } else if (ext5 == ".xtch") {
+      // Strip .xtch extension
+      lastBookTitle.resize(lastBookTitle.length() - 5);
+    } else if (ext4 == ".xtc") {
+      // Strip .xtc extension
+      lastBookTitle.resize(lastBookTitle.length() - 4);
+    }
+  }
 
   // Start at READ (0) if continue available, otherwise FILES (1)
   selectorIndex = hasContinueReading ? 0 : 1;
@@ -167,30 +203,49 @@ void HomeActivity::renderGrid() const {
     const bool isSelected = (selectorIndex == i);
     const bool isDisabled = (i == 0 && !hasContinueReading);
 
+    // Determine text color based on state
+    const bool textColor = isDisabled ? THEME.secondaryTextBlack : (isSelected ? THEME.selectionTextBlack : THEME.primaryTextBlack);
+
+    // Draw cell background
     if (isDisabled) {
-      // Draw disabled N/A cell (outline only)
       renderer.drawRect(cellX, cellY, cellWidth, cellHeight, THEME.primaryTextBlack);
-      // Center "N/A" text in cell
-      const int textWidth = renderer.getTextWidth(THEME.readerFontId, "N/A", BOLD);
-      const int textX = cellX + (cellWidth - textWidth) / 2;
-      const int textY = cellY + cellHeight / 2 - renderer.getFontAscenderSize(THEME.readerFontId) / 2;
-      renderer.drawText(THEME.readerFontId, textX, textY, "N/A", THEME.secondaryTextBlack, BOLD);
     } else if (isSelected) {
-      // Draw selected cell (filled with selection color)
       renderer.fillRect(cellX, cellY, cellWidth, cellHeight, THEME.selectionFillBlack);
-      // Center text in cell
-      const int textWidth = renderer.getTextWidth(THEME.readerFontId, labels[i], BOLD);
-      const int textX = cellX + (cellWidth - textWidth) / 2;
-      const int textY = cellY + cellHeight / 2 - renderer.getFontAscenderSize(THEME.readerFontId) / 2;
-      renderer.drawText(THEME.readerFontId, textX, textY, labels[i], THEME.selectionTextBlack, BOLD);
     } else {
-      // Draw unselected cell (outline with primary text color)
       renderer.drawRect(cellX, cellY, cellWidth, cellHeight, THEME.primaryTextBlack);
-      // Center text in cell
-      const int textWidth = renderer.getTextWidth(THEME.readerFontId, labels[i], BOLD);
+    }
+
+    // Special handling for READ cell (i==0) with book metadata
+    if (i == 0 && hasContinueReading && !lastBookTitle.empty()) {
+      // Show book title (truncated to fit cell)
+      const int maxTextWidth = cellWidth - 20;
+      std::string displayTitle = renderer.truncatedText(THEME.uiFontId, lastBookTitle.c_str(), maxTextWidth);
+      const int titleWidth = renderer.getTextWidth(THEME.uiFontId, displayTitle.c_str());
+      const int titleX = cellX + (cellWidth - titleWidth) / 2;
+
+      if (!lastBookAuthor.empty()) {
+        // Show title and author on two lines
+        std::string displayAuthor = renderer.truncatedText(THEME.uiFontId, lastBookAuthor.c_str(), maxTextWidth);
+        const int authorWidth = renderer.getTextWidth(THEME.uiFontId, displayAuthor.c_str());
+        const int authorX = cellX + (cellWidth - authorWidth) / 2;
+        const int lineHeight = renderer.getLineHeight(THEME.uiFontId);
+        const int totalHeight = lineHeight * 2;
+        const int titleY = cellY + (cellHeight - totalHeight) / 2;
+        const int authorY = titleY + lineHeight;
+        renderer.drawText(THEME.uiFontId, titleX, titleY, displayTitle.c_str(), textColor);
+        renderer.drawText(THEME.uiFontId, authorX, authorY, displayAuthor.c_str(), textColor);
+      } else {
+        // Show title only, centered
+        const int titleY = cellY + cellHeight / 2 - renderer.getFontAscenderSize(THEME.uiFontId) / 2;
+        renderer.drawText(THEME.uiFontId, titleX, titleY, displayTitle.c_str(), textColor);
+      }
+    } else {
+      // Show standard label
+      const char* label = isDisabled ? "N/A" : labels[i];
+      const int textWidth = renderer.getTextWidth(THEME.readerFontId, label, BOLD);
       const int textX = cellX + (cellWidth - textWidth) / 2;
       const int textY = cellY + cellHeight / 2 - renderer.getFontAscenderSize(THEME.readerFontId) / 2;
-      renderer.drawText(THEME.readerFontId, textX, textY, labels[i], THEME.primaryTextBlack, BOLD);
+      renderer.drawText(THEME.readerFontId, textX, textY, label, textColor, BOLD);
     }
   }
 }
@@ -207,19 +262,8 @@ void HomeActivity::renderList() const {
   int menuIndex = 0;
 
   if (hasContinueReading) {
-    // Extract filename from path for display
-    std::string bookName = APP_STATE.openEpubPath;
-    const size_t lastSlash = bookName.find_last_of('/');
-    if (lastSlash != std::string::npos) {
-      bookName = bookName.substr(lastSlash + 1);
-    }
-    // Remove .epub extension
-    if (bookName.length() > 5 && bookName.substr(bookName.length() - 5) == ".epub") {
-      bookName.resize(bookName.length() - 5);
-    }
-
-    // Truncate if too long
-    std::string continueLabel = "Continue: " + bookName;
+    // Use lastBookTitle which was loaded in onEnter() (contains title or filename)
+    std::string continueLabel = "Continue: " + lastBookTitle;
     int itemWidth = renderer.getTextWidth(THEME.uiFontId, continueLabel.c_str());
     while (itemWidth > renderer.getScreenWidth() - 40 && continueLabel.length() > 13) {
       continueLabel.resize(continueLabel.length() - 4);

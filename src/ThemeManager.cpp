@@ -48,8 +48,15 @@ bool ThemeManager::loadFromFile(const char* path) {
   activeTheme = BUILTIN_LIGHT_THEME;
 
   return IniParser::parseFile(path, [this](const char* section, const char* key, const char* value) {
+    // [theme] section - metadata
+    if (strcmp(section, "theme") == 0) {
+      if (strcmp(key, "name") == 0) {
+        strncpy(activeTheme.displayName, value, sizeof(activeTheme.displayName) - 1);
+        activeTheme.displayName[sizeof(activeTheme.displayName) - 1] = '\0';
+      }
+    }
     // [colors] section
-    if (strcmp(section, "colors") == 0) {
+    else if (strcmp(section, "colors") == 0) {
       if (strcmp(key, "inverted_mode") == 0) {
         activeTheme.invertedMode = IniParser::parseBool(value, false);
       } else if (strcmp(key, "background") == 0) {
@@ -123,6 +130,10 @@ bool ThemeManager::saveToFile(const char* path, const Theme& theme) {
 
   file.println("# Papyrix Theme Configuration");
   file.println("# Edit values and restart device to apply");
+  file.println();
+
+  file.println("[theme]");
+  file.printf("name = %s\n", theme.displayName[0] ? theme.displayName : "Custom");
   file.println();
 
   file.println("[colors]");

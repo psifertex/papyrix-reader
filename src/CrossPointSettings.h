@@ -58,6 +58,8 @@ class CrossPointSettings {
   uint8_t sideButtonLayout = PREV_NEXT;
   // Show book cover as first page when reading
   uint8_t showBookCover = 1;
+  // Show book title/author on home screen (from EPUB metadata)
+  uint8_t showBookMetadata = 1;
   // Auto-sleep timeout setting
   uint8_t sleepTimeout = SLEEP_10_MIN;
   // Theme name (loaded from /themes/<name>.theme)
