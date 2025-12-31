@@ -189,7 +189,13 @@ For more details on the internal file structures, see the [file formats document
 
 ### EPUB to XTC Converter (Web)
 
-[epub-to-xtc-converter](https://github.com/bigbag/epub-to-xtc-converter) — browser-based converter from EPUB to Xteink's native XTC/XTCH format. No installation required.
+[epub-to-xtc-converter](https://github.com/bigbag/epub-to-xtc-converter) — browser-based converter from EPUB to Xteink's native XTC/XTCH format. Uses CREngine WASM for accurate rendering.
+
+- Device presets for Xteink X4/X3 (480x800)
+- Font selection from Google Fonts or custom TTF/OTF
+- Configurable margins, line height, hyphenation (42 languages)
+- Dark mode and dithering options
+- Batch processing and ZIP export
 
 **Live version:** [liashkov.site/epub-to-xtc-converter](https://liashkov.site/epub-to-xtc-converter/)
 

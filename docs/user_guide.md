@@ -37,7 +37,7 @@ The Home Screen layout is controlled by your theme (see [Customization Guide](cu
 
 #### Grid Layout (default)
 A **2x2 grid** with four options:
-- **READ** (top-left) — Continue reading your last book (shows "N/A" if no book loaded)
+- **READ** (top-left) — Continue reading your last book. When "Show Book Info" is enabled, displays the book title and author; otherwise shows "N/A" if no book loaded.
 - **FILES** (top-right) — Browse and select books from the SD card
 - **SYNC** (bottom-left) — File transfer via WiFi web server
 - **SETUP** (bottom-right) — Device settings
@@ -106,6 +106,9 @@ The Settings screen allows you to configure the device's behavior:
 - **Show Book Cover** (default: ON)
   - Display the book cover image as the first page when reading
 
+- **Show Book Info** (default: ON)
+  - Display book title and author on the home screen (from EPUB metadata)
+
 - **Short Power Button Click** (default: OFF)
   - Whether to trigger power on a short press (ON) or long press (OFF)
 
@@ -170,7 +173,7 @@ Once you have opened a book, the button layout changes to facilitate reading.
 
 ## 5. Chapter Selection Screen
 
-Accessible by pressing **Confirm** while inside a book.
+Accessible by pressing **Confirm** while inside a book. The screen header displays the book title.
 
 1.  Use **Left** (or **Volume Up**), or **Right** (or **Volume Down**) to highlight the desired chapter.
 2.  Press **Confirm** to jump to that chapter.
