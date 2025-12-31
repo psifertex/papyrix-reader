@@ -15,7 +15,6 @@
 #include "config.h"
 
 namespace {
-constexpr int pagesPerRefresh = 15;
 constexpr unsigned long skipChapterMs = 700;
 constexpr unsigned long goHomeMs = 1000;
 constexpr float lineCompression = 0.95f;
@@ -400,7 +399,7 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int or
   renderStatusBar(orientedMarginRight, orientedMarginBottom, orientedMarginLeft);
   if (pagesUntilFullRefresh <= 1) {
     renderer.displayBuffer(EInkDisplay::HALF_REFRESH);
-    pagesUntilFullRefresh = pagesPerRefresh;
+    pagesUntilFullRefresh = SETTINGS.getPagesPerRefreshValue();
   } else {
     renderer.displayBuffer();
     pagesUntilFullRefresh--;
@@ -479,7 +478,7 @@ void EpubReaderActivity::renderCoverPage(const int orientedMarginTop, const int 
   // Display with refresh logic
   if (pagesUntilFullRefresh <= 1) {
     renderer.displayBuffer(EInkDisplay::HALF_REFRESH);
-    pagesUntilFullRefresh = pagesPerRefresh;
+    pagesUntilFullRefresh = SETTINGS.getPagesPerRefreshValue();
   } else {
     renderer.displayBuffer();
     pagesUntilFullRefresh--;

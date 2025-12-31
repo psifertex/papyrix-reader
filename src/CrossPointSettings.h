@@ -40,6 +40,9 @@ class CrossPointSettings {
   // Sleep timeout options (in minutes)
   enum SLEEP_TIMEOUT { SLEEP_5_MIN = 0, SLEEP_10_MIN = 1, SLEEP_15_MIN = 2, SLEEP_30_MIN = 3 };
 
+  // Pages per full refresh (to clear ghosting)
+  enum PAGES_PER_REFRESH { PPR_1 = 0, PPR_5 = 1, PPR_10 = 2, PPR_15 = 3, PPR_30 = 4 };
+
   // Sleep screen settings
   uint8_t sleepScreen = DARK;
   // Status bar settings
@@ -54,6 +57,8 @@ class CrossPointSettings {
   // Font size for reading
   // 0 = small (14pt), 1 = normal (16pt, default), 2 = large (18pt)
   uint8_t fontSize = FONT_MEDIUM;
+  // Pages per full refresh for e-paper (to clear ghosting)
+  uint8_t pagesPerRefresh = PPR_15;
   // Side button layout
   uint8_t sideButtonLayout = PREV_NEXT;
   // Show book cover as first page when reading
@@ -94,6 +99,11 @@ class CrossPointSettings {
       default:
         return READER_FONT_ID;
     }
+  }
+
+  int getPagesPerRefreshValue() const {
+    constexpr int values[] = {1, 5, 10, 15, 30};
+    return values[pagesPerRefresh];
   }
 
   bool saveToFile() const;

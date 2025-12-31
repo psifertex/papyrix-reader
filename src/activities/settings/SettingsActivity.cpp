@@ -10,26 +10,33 @@
 
 // Define the static settings list
 namespace {
-constexpr int settingsCount = 11;
+// Enum value arrays (must match CrossPointSettings enums)
+constexpr const char* sleepScreenValues[] = {"Dark", "Light", "Custom", "Cover"};
+constexpr const char* statusBarValues[] = {"None", "No Progress", "Full"};
+constexpr const char* fontSizeValues[] = {"Small", "Normal", "Large"};
+constexpr const char* pagesPerRefreshValues[] = {"1", "5", "10", "15", "30"};
+constexpr const char* orientationValues[] = {"Portrait", "Landscape CW", "Inverted", "Landscape CCW"};
+constexpr const char* sleepTimeoutValues[] = {"5 min", "10 min", "15 min", "30 min"};
+
+constexpr int settingsCount = 12;
 const SettingInfo settingsList[settingsCount] = {
     // Theme selection (special type - handled dynamically)
-    {"Theme", SettingType::THEME_SELECT, nullptr, {}},
+    {"Theme", SettingType::THEME_SELECT, nullptr, nullptr, 0},
     // Should match with SLEEP_SCREEN_MODE
-    {"Sleep Screen", SettingType::ENUM, &CrossPointSettings::sleepScreen, {"Dark", "Light", "Custom", "Cover"}},
-    {"Status Bar", SettingType::ENUM, &CrossPointSettings::statusBar, {"None", "No Progress", "Full"}},
-    {"Extra Paragraph Spacing", SettingType::TOGGLE, &CrossPointSettings::extraParagraphSpacing, {}},
+    {"Sleep Screen", SettingType::ENUM, &CrossPointSettings::sleepScreen, sleepScreenValues, 4},
+    {"Status Bar", SettingType::ENUM, &CrossPointSettings::statusBar, statusBarValues, 3},
+    {"Extra Paragraph Spacing", SettingType::TOGGLE, &CrossPointSettings::extraParagraphSpacing, nullptr, 0},
     // Should match with FONT_SIZE
-    {"Font Size", SettingType::ENUM, &CrossPointSettings::fontSize, {"Small", "Normal", "Large"}},
-    {"Show Book Cover", SettingType::TOGGLE, &CrossPointSettings::showBookCover, {}},
-    {"Show Book Info", SettingType::TOGGLE, &CrossPointSettings::showBookMetadata, {}},
-    {"Short Power Button Click", SettingType::TOGGLE, &CrossPointSettings::shortPwrBtn, {}},
-    {"Reading Orientation",
-     SettingType::ENUM,
-     &CrossPointSettings::orientation,
-     {"Portrait", "Landscape CW", "Inverted", "Landscape CCW"}},
+    {"Font Size", SettingType::ENUM, &CrossPointSettings::fontSize, fontSizeValues, 3},
+    // Should match with PAGES_PER_REFRESH
+    {"Pages Per Refresh", SettingType::ENUM, &CrossPointSettings::pagesPerRefresh, pagesPerRefreshValues, 5},
+    {"Show Book Cover", SettingType::TOGGLE, &CrossPointSettings::showBookCover, nullptr, 0},
+    {"Show Book Info", SettingType::TOGGLE, &CrossPointSettings::showBookMetadata, nullptr, 0},
+    {"Short Power Button Click", SettingType::TOGGLE, &CrossPointSettings::shortPwrBtn, nullptr, 0},
+    {"Reading Orientation", SettingType::ENUM, &CrossPointSettings::orientation, orientationValues, 4},
     // Should match with SLEEP_TIMEOUT
-    {"Sleep Timeout", SettingType::ENUM, &CrossPointSettings::sleepTimeout, {"5 min", "10 min", "15 min", "30 min"}},
-    {"Check for updates", SettingType::ACTION, nullptr, {}},
+    {"Sleep Timeout", SettingType::ENUM, &CrossPointSettings::sleepTimeout, sleepTimeoutValues, 4},
+    {"Check for updates", SettingType::ACTION, nullptr, nullptr, 0},
 };
 }  // namespace
 
@@ -136,7 +143,7 @@ void SettingsActivity::toggleCurrentSetting() {
     SETTINGS.*(setting.valuePtr) = !currentValue;
   } else if (setting.type == SettingType::ENUM && setting.valuePtr != nullptr) {
     const uint8_t currentValue = SETTINGS.*(setting.valuePtr);
-    SETTINGS.*(setting.valuePtr) = (currentValue + 1) % static_cast<uint8_t>(setting.enumValues.size());
+    SETTINGS.*(setting.valuePtr) = (currentValue + 1) % setting.enumCount;
   } else if (setting.type == SettingType::THEME_SELECT) {
     // Cycle through available themes
     if (!availableThemes.empty()) {

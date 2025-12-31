@@ -18,7 +18,8 @@ struct SettingInfo {
   const char* name;                        // Display name of the setting
   SettingType type;                        // Type of setting
   uint8_t CrossPointSettings::* valuePtr;  // Pointer to member in CrossPointSettings (for TOGGLE/ENUM)
-  std::vector<std::string> enumValues;
+  const char* const* enumValues;           // Pointer to const char* array (for ENUM)
+  uint8_t enumCount;                       // Number of enum values
 };
 
 class SettingsActivity final : public ActivityWithSubactivity {

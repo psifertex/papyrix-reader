@@ -103,6 +103,10 @@ The Settings screen allows you to configure the device's behavior:
   - Options: Small (14pt), Normal (16pt), Large (18pt)
   - Text size for reading
 
+- **Pages Per Refresh** (default: 15)
+  - Options: 1, 5, 10, 15, 30
+  - Number of pages to turn before performing a full e-paper refresh (clears ghosting)
+
 - **Show Book Cover** (default: ON)
   - Display the book cover image as the first page when reading
 
