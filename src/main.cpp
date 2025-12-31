@@ -5,23 +5,23 @@
 #include <InputManager.h>
 #include <SDCardManager.h>
 #include <SPI.h>
-#include <builtinFonts/bookerly_2b.h>
-#include <builtinFonts/bookerly_bold_2b.h>
-#include <builtinFonts/bookerly_bold_italic_2b.h>
-#include <builtinFonts/bookerly_italic_2b.h>
-// Medium font (16pt) - generate with: python3 fontconvert.py bookerly_medium_2b 16 Bookerly*.ttf --2bit
-#include <builtinFonts/bookerly_medium_2b.h>
-#include <builtinFonts/bookerly_medium_bold_2b.h>
-#include <builtinFonts/bookerly_medium_bold_italic_2b.h>
-#include <builtinFonts/bookerly_medium_italic_2b.h>
-// Large font (18pt) - generate with: python3 fontconvert.py bookerly_large_2b 18 Bookerly*.ttf --2bit
-#include <builtinFonts/bookerly_large_2b.h>
-#include <builtinFonts/bookerly_large_bold_2b.h>
-#include <builtinFonts/bookerly_large_bold_italic_2b.h>
-#include <builtinFonts/bookerly_large_italic_2b.h>
-#include <builtinFonts/pixelarial14.h>
-#include <builtinFonts/ubuntu_12.h>
-#include <builtinFonts/ubuntu_bold_12.h>
+#include <builtinFonts/reader_2b.h>
+#include <builtinFonts/reader_bold_2b.h>
+#include <builtinFonts/reader_bold_italic_2b.h>
+#include <builtinFonts/reader_italic_2b.h>
+// Medium font (16pt)
+#include <builtinFonts/reader_medium_2b.h>
+#include <builtinFonts/reader_medium_bold_2b.h>
+#include <builtinFonts/reader_medium_bold_italic_2b.h>
+#include <builtinFonts/reader_medium_italic_2b.h>
+// Large font (18pt)
+#include <builtinFonts/reader_large_2b.h>
+#include <builtinFonts/reader_large_bold_2b.h>
+#include <builtinFonts/reader_large_bold_italic_2b.h>
+#include <builtinFonts/reader_large_italic_2b.h>
+#include <builtinFonts/small14.h>
+#include <builtinFonts/ui_12.h>
+#include <builtinFonts/ui_bold_12.h>
 
 #include "Battery.h"
 #include "CrossPointSettings.h"
@@ -58,34 +58,34 @@ GfxRenderer renderer(einkDisplay);
 Activity* currentActivity;
 
 // Fonts - Small (14pt, default)
-EpdFont bookerlyFont(&bookerly_2b);
-EpdFont bookerlyBoldFont(&bookerly_bold_2b);
-EpdFont bookerlyItalicFont(&bookerly_italic_2b);
-EpdFont bookerlyBoldItalicFont(&bookerly_bold_italic_2b);
-EpdFontFamily bookerlyFontFamily(&bookerlyFont, &bookerlyBoldFont, &bookerlyItalicFont, &bookerlyBoldItalicFont);
+EpdFont readerFont(&reader_2b);
+EpdFont readerBoldFont(&reader_bold_2b);
+EpdFont readerItalicFont(&reader_italic_2b);
+EpdFont readerBoldItalicFont(&reader_bold_italic_2b);
+EpdFontFamily readerFontFamily(&readerFont, &readerBoldFont, &readerItalicFont, &readerBoldItalicFont);
 
 // Fonts - Medium (16pt)
-EpdFont bookerlyMediumFont(&bookerly_medium_2b);
-EpdFont bookerlyMediumBoldFont(&bookerly_medium_bold_2b);
-EpdFont bookerlyMediumItalicFont(&bookerly_medium_italic_2b);
-EpdFont bookerlyMediumBoldItalicFont(&bookerly_medium_bold_italic_2b);
-EpdFontFamily bookerlyMediumFontFamily(&bookerlyMediumFont, &bookerlyMediumBoldFont, &bookerlyMediumItalicFont,
-                                       &bookerlyMediumBoldItalicFont);
+EpdFont readerMediumFont(&reader_medium_2b);
+EpdFont readerMediumBoldFont(&reader_medium_bold_2b);
+EpdFont readerMediumItalicFont(&reader_medium_italic_2b);
+EpdFont readerMediumBoldItalicFont(&reader_medium_bold_italic_2b);
+EpdFontFamily readerMediumFontFamily(&readerMediumFont, &readerMediumBoldFont, &readerMediumItalicFont,
+                                     &readerMediumBoldItalicFont);
 
 // Fonts - Large (18pt)
-EpdFont bookerlyLargeFont(&bookerly_large_2b);
-EpdFont bookerlyLargeBoldFont(&bookerly_large_bold_2b);
-EpdFont bookerlyLargeItalicFont(&bookerly_large_italic_2b);
-EpdFont bookerlyLargeBoldItalicFont(&bookerly_large_bold_italic_2b);
-EpdFontFamily bookerlyLargeFontFamily(&bookerlyLargeFont, &bookerlyLargeBoldFont, &bookerlyLargeItalicFont,
-                                      &bookerlyLargeBoldItalicFont);
+EpdFont readerLargeFont(&reader_large_2b);
+EpdFont readerLargeBoldFont(&reader_large_bold_2b);
+EpdFont readerLargeItalicFont(&reader_large_italic_2b);
+EpdFont readerLargeBoldItalicFont(&reader_large_bold_italic_2b);
+EpdFontFamily readerLargeFontFamily(&readerLargeFont, &readerLargeBoldFont, &readerLargeItalicFont,
+                                    &readerLargeBoldItalicFont);
 
-EpdFont smallFont(&pixelarial14);
+EpdFont smallFont(&small14);
 EpdFontFamily smallFontFamily(&smallFont);
 
-EpdFont ubuntu12Font(&ubuntu_12);
-EpdFont ubuntuBold12Font(&ubuntu_bold_12);
-EpdFontFamily ubuntuFontFamily(&ubuntu12Font, &ubuntuBold12Font);
+EpdFont ui12Font(&ui_12);
+EpdFont uiBold12Font(&ui_bold_12);
+EpdFontFamily uiFontFamily(&ui12Font, &uiBold12Font);
 
 // measurement of power button press duration calibration value
 unsigned long t1 = 0;
@@ -190,10 +190,10 @@ void onGoHome() {
 void setupDisplayAndFonts() {
   einkDisplay.begin();
   Serial.printf("[%lu] [   ] Display initialized\n", millis());
-  renderer.insertFont(READER_FONT_ID, bookerlyFontFamily);
-  renderer.insertFont(READER_FONT_ID_MEDIUM, bookerlyMediumFontFamily);
-  renderer.insertFont(READER_FONT_ID_LARGE, bookerlyLargeFontFamily);
-  renderer.insertFont(UI_FONT_ID, ubuntuFontFamily);
+  renderer.insertFont(READER_FONT_ID, readerFontFamily);
+  renderer.insertFont(READER_FONT_ID_MEDIUM, readerMediumFontFamily);
+  renderer.insertFont(READER_FONT_ID_LARGE, readerLargeFontFamily);
+  renderer.insertFont(UI_FONT_ID, uiFontFamily);
   renderer.insertFont(SMALL_FONT_ID, smallFontFamily);
   Serial.printf("[%lu] [   ] Fonts setup\n", millis());
 }

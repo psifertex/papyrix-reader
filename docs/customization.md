@@ -304,9 +304,9 @@ If a custom font file is missing or corrupted:
 
 - The device automatically falls back to built-in fonts
 - Built-in fonts are always available:
-  - **Bookerly** - Reader font (3 sizes)
-  - **Ubuntu** - UI font
-  - **Pixelarial** - Small text
+  - **Reader** - Reader font (3 sizes)
+  - **UI** - UI font
+  - **Small** - Small text
 
 > **Note:** Custom font loading is optional. The device works perfectly with built-in fonts if no custom fonts are configured.
 

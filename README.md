@@ -207,7 +207,7 @@ For more details on the internal file structures, see the [file formats document
 python src/optimizer.py ./ebooks ./optimized
 
 # Convert to XTCH format
-python src/converter.py book.epub book.xtch --font fonts/Bookerly.ttf
+python src/converter.py book.epub book.xtch --font fonts/MyFont.ttf
 ```
 
 ## Contributing

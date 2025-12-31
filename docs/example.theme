@@ -35,9 +35,9 @@ home_layout = grid
 front_buttons = bclr
 
 [fonts]
-# Custom UI font family name (leave empty for builtin Ubuntu font)
+# Custom UI font family name (leave empty for builtin UI font)
 # Must match directory name under /fonts/ on SD card
 ui_font =
-# Custom reader font family name (leave empty for builtin Bookerly font)
+# Custom reader font family name (leave empty for builtin Reader font)
 # Must match directory name under /fonts/ on SD card
 reader_font =
