@@ -19,7 +19,7 @@ constexpr const char* orientationValues[] = {"Portrait", "Landscape CW", "Invert
 constexpr const char* sleepTimeoutValues[] = {"5 min", "10 min", "15 min", "30 min"};
 constexpr const char* paragraphAlignmentValues[] = {"Justified", "Left", "Center", "Right"};
 
-constexpr int settingsCount = 12;
+constexpr int settingsCount = 13;
 const SettingInfo settingsList[settingsCount] = {
     // Theme
     {"Theme", SettingType::THEME_SELECT, nullptr, nullptr, 0},
@@ -35,6 +35,8 @@ const SettingInfo settingsList[settingsCount] = {
     {"Sleep Timeout", SettingType::ENUM, &CrossPointSettings::sleepTimeout, sleepTimeoutValues, 4},
     {"Sleep Screen", SettingType::ENUM, &CrossPointSettings::sleepScreen, sleepScreenValues, 4},
     {"Short Power Button Click", SettingType::TOGGLE, &CrossPointSettings::shortPwrBtn, nullptr, 0},
+    // Actions
+    {"File transfer", SettingType::ACTION, nullptr, nullptr, 0},
     {"Check for updates", SettingType::ACTION, nullptr, nullptr, 0},
 };
 }  // namespace
@@ -152,7 +154,10 @@ void SettingsActivity::toggleCurrentSetting() {
       THEME_MANAGER.loadTheme(SETTINGS.themeName);
     }
   } else if (setting.type == SettingType::ACTION) {
-    if (std::string(setting.name) == "Check for updates") {
+    if (std::string(setting.name) == "File transfer") {
+      SETTINGS.saveToFile();
+      onFileTransferOpen();
+    } else if (std::string(setting.name) == "Check for updates") {
       xSemaphoreTake(renderingMutex, portMAX_DELAY);
       exitActivity();
       enterNewActivity(new OtaUpdateActivity(renderer, mappedInput, [this] {

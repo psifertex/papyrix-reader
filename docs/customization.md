@@ -54,7 +54,6 @@ margin_top = 9            # Top margin in pixels
 margin_side = 3           # Side margin in pixels
 item_height = 30          # Menu item height
 item_spacing = 0          # Space between menu items
-home_layout = grid        # grid or list
 front_buttons = bclr      # bclr or lrbc (see below)
 
 [fonts]
@@ -95,8 +94,6 @@ reader_font =             # Reader font family (empty = builtin)
   - Default: `30`
 - **item_spacing** - Vertical space between items in pixels
   - Default: `0`
-- **home_layout** - Home screen layout style
-  - Values: `grid` (2x2 grid) or `list` (vertical menu)
 - **front_buttons** - Front button mapping
   - Values: `bclr` (Back, Confirm, Left, Right) or `lrbc` (Left, Right, Back, Confirm)
 
@@ -127,7 +124,6 @@ margin_top = 9
 margin_side = 3
 item_height = 30
 item_spacing = 0
-home_layout = grid
 front_buttons = bclr
 
 [fonts]
@@ -135,7 +131,7 @@ ui_font =
 reader_font =
 ```
 
-### Example: Compact List Theme
+### Example: Compact Theme
 
 ```ini
 [colors]
@@ -155,7 +151,6 @@ margin_top = 5
 margin_side = 5
 item_height = 25
 item_spacing = 2
-home_layout = list
 front_buttons = bclr
 
 [fonts]

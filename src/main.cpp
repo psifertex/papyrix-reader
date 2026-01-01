@@ -178,13 +178,12 @@ void onGoToFileTransfer() {
 
 void onGoToSettings() {
   exitActivity();
-  enterNewActivity(new SettingsActivity(renderer, mappedInputManager, onGoHome));
+  enterNewActivity(new SettingsActivity(renderer, mappedInputManager, onGoHome, onGoToFileTransfer));
 }
 
 void onGoHome() {
   exitActivity();
-  enterNewActivity(new HomeActivity(renderer, mappedInputManager, onContinueReading, onGoToReaderHome, onGoToSettings,
-                                    onGoToFileTransfer));
+  enterNewActivity(new HomeActivity(renderer, mappedInputManager, onContinueReading, onGoToReaderHome, onGoToSettings));
 }
 
 void setupDisplayAndFonts() {

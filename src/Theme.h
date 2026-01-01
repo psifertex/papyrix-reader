@@ -9,9 +9,6 @@
 // Swapped: Left, Right, Back, Confirm
 enum FrontButtonLayout { FRONT_BCLR = 0, FRONT_LRBC = 1 };
 
-// Home screen layout options
-enum HomeLayout { HOME_GRID = 0, HOME_LIST = 1 };
-
 /**
  * Theme configuration for Papyrix UI.
  *
@@ -56,7 +53,6 @@ struct Theme {
   char readerFontFamily[32];
 
   // UI Layout settings
-  uint8_t homeLayout;         // HomeLayout enum: HOME_GRID or HOME_LIST
   uint8_t frontButtonLayout;  // FrontButtonLayout enum: FRONT_BCLR or FRONT_LRBC
 };
 
@@ -83,7 +79,6 @@ inline Theme getBuiltinLightTheme() {
   theme.readerFontIdLarge = READER_FONT_ID_LARGE;
   theme.uiFontFamily[0] = '\0';
   theme.readerFontFamily[0] = '\0';
-  theme.homeLayout = HOME_GRID;
   theme.frontButtonLayout = FRONT_BCLR;
   return theme;
 }
@@ -111,7 +106,6 @@ inline Theme getBuiltinDarkTheme() {
   theme.readerFontIdLarge = READER_FONT_ID_LARGE;
   theme.uiFontFamily[0] = '\0';
   theme.readerFontFamily[0] = '\0';
-  theme.homeLayout = HOME_GRID;
   theme.frontButtonLayout = FRONT_BCLR;
   return theme;
 }

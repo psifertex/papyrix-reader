@@ -90,8 +90,6 @@ bool ThemeManager::loadFromFile(const char* path) {
         activeTheme.itemHeight = static_cast<uint8_t>(IniParser::parseInt(value, 30));
       } else if (strcmp(key, "item_spacing") == 0) {
         activeTheme.itemSpacing = static_cast<uint8_t>(IniParser::parseInt(value, 0));
-      } else if (strcmp(key, "home_layout") == 0) {
-        activeTheme.homeLayout = (strcmp(value, "list") == 0) ? HOME_LIST : HOME_GRID;
       } else if (strcmp(key, "front_buttons") == 0) {
         activeTheme.frontButtonLayout = (strcmp(value, "lrbc") == 0) ? FRONT_LRBC : FRONT_BCLR;
       }
@@ -157,7 +155,6 @@ bool ThemeManager::saveToFile(const char* path, const Theme& theme) {
   file.printf("margin_side = %d\n", theme.screenMarginSide);
   file.printf("item_height = %d\n", theme.itemHeight);
   file.printf("item_spacing = %d\n", theme.itemSpacing);
-  file.printf("home_layout = %s\n", theme.homeLayout == HOME_LIST ? "list" : "grid");
   file.printf("front_buttons = %s\n", theme.frontButtonLayout == FRONT_LRBC ? "lrbc" : "bclr");
   file.println();
 

@@ -33,27 +33,23 @@ Upon turning the device on for the first time, you will be placed on the **Home*
 
 ### 3.1 Home Screen
 
-The Home Screen layout is controlled by your theme (see [Customization Guide](customization.md)).
+The Home Screen displays the app title "Papyrix Reader" at the top with a **battery indicator** in the top-right corner.
 
-A **battery indicator** is displayed in the top-right corner, showing the current battery level as a percentage with an icon.
+#### Book Card
+The center of the screen features a **book card** - a dark rectangle with a bookmark icon at the top:
+- **With a book open:** Displays the book title, author, and "Continue Reading" text
+- **No book open:** Displays "No book open"
 
-#### Grid Layout (default)
-A **2x2 grid** with four options:
-- **READ** (top-left) — Continue reading your last book. When "Show Book Details" is enabled, displays the book title and author; otherwise shows "N/A" if no book loaded.
-- **FILES** (top-right) — Browse and select books from the SD card
-- **SYNC** (bottom-left) — File transfer via WiFi web server
-- **SETUP** (bottom-right) — Device settings
+Press **Confirm** on the book card to continue reading your current book.
 
-#### List Layout
-A vertical menu with:
-- **Continue: [Book Name]** — Resume reading (only shown if a book is open)
-- **Browse** — Browse and select books from the SD card
-- **File transfer** — Upload files via WiFi web server
-- **Settings** — Device settings
+#### Menu Items
+Below the book card are two bordered menu items:
+- **Files** — Browse and select books from the SD card
+- **Settings** — Device settings and file transfer
 
 **Navigation:**
-* Use **Left/Right** or **Volume Up/Down** to move between options
-* Press **Confirm** to select an option
+* Use **Left/Right** or **Volume Up/Down** to move between items
+* Press **Confirm** to select an item
 
 ### 3.2 Book Selection (Files)
 
@@ -69,9 +65,9 @@ The Files screen acts as a folder and file browser.
 
 See [4. Reading Mode](#4-reading-mode) below for more information.
 
-### 3.4 File Transfer (Sync)
+### 3.4 File Transfer
 
-The Sync screen allows you to upload new e-books to the device over WiFi.
+File transfer is accessible from **Settings > File transfer**. This allows you to upload new e-books to the device over WiFi.
 
 When you enter the screen, you'll be prompted to choose a network mode:
 
@@ -87,7 +83,7 @@ The Settings screen allows you to configure the device's behavior:
 
 - **Theme** (default: light)
   - Select from available themes (light, dark, or custom themes from SD card)
-  - Themes control colors, home layout (grid/list), button mappings, and fonts
+  - Themes control colors, button mappings, and fonts
   - See [Customization Guide](customization.md) for creating custom themes
 
 - **Sleep Screen** (default: Dark)
@@ -126,6 +122,9 @@ The Settings screen allows you to configure the device's behavior:
 - **Sleep Timeout** (default: 10 min)
   - Options: 5 min, 10 min, 15 min, 30 min
   - Time of inactivity before the device automatically sleeps
+
+- **File transfer**
+  - Upload e-books to the device via WiFi web server
 
 - **Check for updates**
   - Check for and install firmware updates via WiFi
