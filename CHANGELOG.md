@@ -1,5 +1,15 @@
 
 
+## v0.5.0 (2026-01-01)
+
+*  Update readme [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
+*  Prevent device sleep during webserver and OTA activity [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
+*  Fix text overlap in File Transfer UI [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
+*  Fix memory error after WiFi use by auto-restarting device [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
+*  Fix keyboard entry UI to use standard button hints [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
+*  Redesign on-screen keyboard with full character grid layout [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
+
+
 ## v0.4.0 (2026-01-01)
 
 *  Fix string termination, navigation wrap, and error handling [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
