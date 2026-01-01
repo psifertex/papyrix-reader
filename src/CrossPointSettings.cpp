@@ -34,7 +34,7 @@ bool CrossPointSettings::saveToFile() const {
   serialization::writePod(outputFile, fontSize);
   serialization::writePod(outputFile, pagesPerRefresh);
   serialization::writePod(outputFile, sideButtonLayout);
-  serialization::writePod(outputFile, showBookCover);
+  serialization::writePod(outputFile, showBookDetails);
   serialization::writePod(outputFile, sleepTimeout);
   serialization::writePod(outputFile, paragraphAlignment);
   // Write themeName as fixed-length string
@@ -81,7 +81,7 @@ bool CrossPointSettings::loadFromFile() {
     if (++settingsRead >= fileSettingsCount) break;
     serialization::readPod(inputFile, sideButtonLayout);
     if (++settingsRead >= fileSettingsCount) break;
-    serialization::readPod(inputFile, showBookCover);
+    serialization::readPod(inputFile, showBookDetails);
     if (++settingsRead >= fileSettingsCount) break;
     serialization::readPod(inputFile, sleepTimeout);
     if (++settingsRead >= fileSettingsCount) break;

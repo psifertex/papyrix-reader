@@ -39,7 +39,7 @@ void HomeActivity::onEnter() {
     const std::string ext5 = lastBookTitle.length() >= 5 ? lastBookTitle.substr(lastBookTitle.length() - 5) : "";
     const std::string ext4 = lastBookTitle.length() >= 4 ? lastBookTitle.substr(lastBookTitle.length() - 4) : "";
 
-    if (ext5 == ".epub" && SETTINGS.showBookMetadata) {
+    if (ext5 == ".epub" && SETTINGS.showBookDetails) {
       // Try to load EPUB metadata from cache (don't build if missing)
       Epub epub(APP_STATE.openEpubPath, "/.crosspoint");
       if (epub.load(false)) {

@@ -39,7 +39,7 @@ A **battery indicator** is displayed in the top-right corner, showing the curren
 
 #### Grid Layout (default)
 A **2x2 grid** with four options:
-- **READ** (top-left) — Continue reading your last book. When "Show Book Info" is enabled, displays the book title and author; otherwise shows "N/A" if no book loaded.
+- **READ** (top-left) — Continue reading your last book. When "Show Book Details" is enabled, displays the book title and author; otherwise shows "N/A" if no book loaded.
 - **FILES** (top-right) — Browse and select books from the SD card
 - **SYNC** (bottom-left) — File transfer via WiFi web server
 - **SETUP** (bottom-right) — Device settings
@@ -113,11 +113,8 @@ The Settings screen allows you to configure the device's behavior:
   - Options: 1, 5, 10, 15, 30
   - Number of pages to turn before performing a full e-paper refresh (clears ghosting)
 
-- **Show Book Cover** (default: ON)
-  - Display the book cover image as the first page when reading
-
-- **Show Book Info** (default: ON)
-  - Display book title and author on the home screen (from EPUB metadata)
+- **Show Book Details** (default: ON)
+  - Display book cover as first page when reading, and title/author on home screen
 
 - **Short Power Button Click** (default: OFF)
   - Whether to trigger power on a short press (ON) or long press (OFF)

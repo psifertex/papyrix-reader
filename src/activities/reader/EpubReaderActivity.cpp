@@ -369,7 +369,7 @@ void EpubReaderActivity::renderScreen() {
     }
 
     // Check if this is an empty cover page (spine[0], page 0, no elements) and setting is enabled
-    if (SETTINGS.showBookCover && currentSpineIndex == 0 && section->currentPage == 0 && p->elements.empty() &&
+    if (SETTINGS.showBookDetails && currentSpineIndex == 0 && section->currentPage == 0 && p->elements.empty() &&
         epub->generateCoverBmp()) {
       Serial.printf("[%lu] [ERS] Empty cover page detected, rendering cover BMP\n", millis());
       renderCoverPage(orientedMarginTop, orientedMarginRight, orientedMarginBottom, orientedMarginLeft);
