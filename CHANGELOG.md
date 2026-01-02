@@ -1,5 +1,17 @@
 
 
+## v0.6.0 (2026-01-02)
+
+*  Filter system directories from book browser [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
+*  Update docs [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
+*  Update CHANGELOG [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
+*  Update images [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
+*  Optimize ePub chapter loading speed [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
+*  Remove redundant inTocNav variable from TocNavParser [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
+*  Fix race condition causing screen freeze after WiFi password entry [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
+*  Fix battery display always showing 100% on invalid readings [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
+
+
 ## v0.5.0 (2026-01-01)
 
 *  Update readme [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
