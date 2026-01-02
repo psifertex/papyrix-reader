@@ -514,9 +514,18 @@ void EpubReaderActivity::renderStatusBar(const int orientedMarginRight, const in
 
   if (showBattery) {
     // Left aligned battery icon and percentage
-    const uint16_t percentage = battery.readPercentage();
+    const uint16_t millivolts = battery.readMillivolts();
     char percentageText[8];
-    snprintf(percentageText, sizeof(percentageText), "%u%%", percentage);
+    uint16_t percentage = 0;
+    if (millivolts < 100) {
+      // Invalid reading - show error indicator
+      Serial.printf("[BAT] Invalid reading: millivolts=%u, showing --%%\n", millivolts);
+      snprintf(percentageText, sizeof(percentageText), "--%%");
+    } else {
+      percentage = BatteryMonitor::percentageFromMillivolts(millivolts);
+      Serial.printf("[BAT] millivolts=%u, percentage=%u%%\n", millivolts, percentage);
+      snprintf(percentageText, sizeof(percentageText), "%u%%", percentage);
+    }
     percentageTextWidth = renderer.getTextWidth(THEME.smallFontId, percentageText);
     renderer.drawText(THEME.smallFontId, 20 + orientedMarginLeft, textY, percentageText, THEME.primaryTextBlack);
 

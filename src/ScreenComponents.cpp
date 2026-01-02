@@ -6,7 +6,7 @@
 #include "ThemeManager.h"
 
 void ScreenComponents::drawBattery(const GfxRenderer& renderer, int x, int y) {
-  const uint16_t percentage = battery.readPercentage();
+  const uint16_t millivolts = battery.readMillivolts();
 
   // Battery icon dimensions
   constexpr int batteryWidth = 15;
@@ -28,6 +28,19 @@ void ScreenComponents::drawBattery(const GfxRenderer& renderer, int x, int y) {
                     THEME.primaryTextBlack);
   renderer.drawLine(x + batteryWidth - 1, y + 2, x + batteryWidth - 1, y + batteryHeight - 3, THEME.primaryTextBlack);
 
+  // Check for valid reading and calculate percentage
+  char percentageText[8];
+  uint16_t percentage = 0;
+  if (millivolts < 100) {
+    // Invalid reading - show error indicator
+    Serial.printf("[BAT] Invalid reading: millivolts=%u, showing --%%\n", millivolts);
+    snprintf(percentageText, sizeof(percentageText), "--%%");
+  } else {
+    percentage = BatteryMonitor::percentageFromMillivolts(millivolts);
+    Serial.printf("[BAT] millivolts=%u, percentage=%u%%\n", millivolts, percentage);
+    snprintf(percentageText, sizeof(percentageText), "%u%%", percentage);
+  }
+
   // Fill level (proportional to percentage)
   int filledWidth = percentage * (batteryWidth - 5) / 100 + 1;
   if (filledWidth > batteryWidth - 5) {
@@ -36,7 +49,5 @@ void ScreenComponents::drawBattery(const GfxRenderer& renderer, int x, int y) {
   renderer.fillRect(x + 1, y + 1, filledWidth, batteryHeight - 2, THEME.primaryTextBlack);
 
   // Draw percentage text to the right of the icon
-  char percentageText[8];
-  snprintf(percentageText, sizeof(percentageText), "%u%%", percentage);
   renderer.drawText(THEME.smallFontId, x + batteryWidth + spacing, y, percentageText, THEME.primaryTextBlack);
 }

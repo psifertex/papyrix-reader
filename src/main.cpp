@@ -215,8 +215,8 @@ void setup() {
   }
 
   inputManager.begin();
-  // Initialize pins
-  pinMode(BAT_GPIO0, INPUT);
+  // Initialize battery ADC pin with proper attenuation for 0-3.3V range
+  analogSetPinAttenuation(BAT_GPIO0, ADC_11db);
 
   // Initialize SPI with custom pins
   SPI.begin(EPD_SCLK, SD_SPI_MISO, EPD_MOSI, EPD_CS);
