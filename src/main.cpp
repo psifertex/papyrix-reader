@@ -182,12 +182,14 @@ void onGoToReader(const std::string& initialEpubPath) {
 void onGoToReaderHome() { onGoToReader(std::string()); }
 void onContinueReading() { onGoToReader(APP_STATE.openEpubPath); }
 
+void onGoToSettingsFileTransfer();
 void onGoToFileTransfer() {
   exitActivity();
-  enterNewActivity(new CrossPointWebServerActivity(renderer, mappedInputManager, onGoHome));
+  enterNewActivity(new CrossPointWebServerActivity(renderer, mappedInputManager, onGoToSettingsFileTransfer));
 }
 
 void onGoToSettings();
+void onGoToSettingsNetLibrary();
 void onGoToOpdsServers();
 void onOpdsServerSelected(const OpdsServerConfig& server) {
   exitActivity();
@@ -199,13 +201,25 @@ void onOpdsServerSelected(const OpdsServerConfig& server) {
 
 void onGoToOpdsServers() {
   exitActivity();
-  enterNewActivity(new OpdsServerListActivity(renderer, mappedInputManager, onGoToSettings, onOpdsServerSelected));
+  enterNewActivity(new OpdsServerListActivity(renderer, mappedInputManager, onGoToSettingsNetLibrary, onOpdsServerSelected));
 }
 
 void onGoToSettings() {
   exitActivity();
   enterNewActivity(
       new SettingsActivity(renderer, mappedInputManager, onGoHome, onGoToFileTransfer, onGoToOpdsServers));
+}
+
+void onGoToSettingsNetLibrary() {
+  exitActivity();
+  enterNewActivity(
+      new SettingsActivity(renderer, mappedInputManager, onGoHome, onGoToFileTransfer, onGoToOpdsServers, 11));
+}
+
+void onGoToSettingsFileTransfer() {
+  exitActivity();
+  enterNewActivity(
+      new SettingsActivity(renderer, mappedInputManager, onGoHome, onGoToFileTransfer, onGoToOpdsServers, 12));
 }
 
 void onGoHome() {

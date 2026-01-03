@@ -52,8 +52,8 @@ void SettingsActivity::onEnter() {
 
   renderingMutex = xSemaphoreCreateMutex();
 
-  // Reset selection to first item
-  selectedSettingIndex = 0;
+  // Set initial selection
+  selectedSettingIndex = initialSelectedIndex;
 
   // Load available themes
   loadAvailableThemes();
