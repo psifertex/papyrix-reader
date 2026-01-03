@@ -75,8 +75,8 @@ class KeyboardEntryActivity : public Activity {
   OnCompleteCallback onComplete;
   OnCancelCallback onCancel;
 
-  // Keyboard layout - Full Grid (9 rows x 10 columns)
-  static constexpr int NUM_ROWS = 9;
+  // Keyboard layout - Full Grid (10 rows x 10 columns)
+  static constexpr int NUM_ROWS = 10;
   static constexpr int KEYS_PER_ROW = 10;
   static constexpr char keyboard[NUM_ROWS][KEYS_PER_ROW] = {
       {'a','b','c','d','e','f','g','h','i','j'},  // row 0: lowercase
@@ -86,13 +86,14 @@ class KeyboardEntryActivity : public Activity {
       {'K','L','M','N','O','P','Q','R','S','T'},  // row 4: uppercase
       {'U','V','W','X','Y','Z','!','#','$','%'},  // row 5: uppercase + symbols
       {'1','2','3','4','5','6','7','8','9','0'},  // row 6: numbers
-      {'^','&','*','(',')','+',' ','[',']','\\'},  // row 7: symbols (space is '=')
-      {'\x01','\x01','\x01','\x01','\x01','\x01','\x02','\x02','\x02','\x02'}  // row 8: controls
+      {'^','&','*','(',')','+',' ','[',']','\\'},  // row 7: symbols
+      {'/',':',';','~','?','=','\'','"',',','<'},  // row 8: URL/extra symbols
+      {'\x01','\x01','\x01','\x01','\x01','\x01','\x02','\x02','\x02','\x02'}  // row 9: controls
   };
   // Control characters: \x01 = SPACE, \x02 = BACKSPACE
 
-  // Control row (row 8) key positions - only SPACE and BACKSPACE
-  static constexpr int CONTROL_ROW = 8;
+  // Control row (row 9) key positions - only SPACE and BACKSPACE
+  static constexpr int CONTROL_ROW = 9;
   static constexpr int SPACE_START = 0;
   static constexpr int SPACE_END = 5;      // cols 0-5 (6 keys wide)
   static constexpr int BACKSPACE_START = 6;

@@ -228,8 +228,8 @@ void KeyboardEntryActivity::render() const {
   const int leftMargin = buttonAreaLeft;
 
   // Calculate total keyboard height
-  // 8 regular rows + 1 control row + 3 separators (no zone labels)
-  constexpr int regularRowsHeight = 8 * (keyHeight + keySpacingV);
+  // 9 regular rows + 1 control row + 3 separators (no zone labels)
+  constexpr int regularRowsHeight = 9 * (keyHeight + keySpacingV);
   constexpr int controlRowHeight = keyHeight + keySpacingV;
   constexpr int separatorsHeight = 3 * separatorHeight;
   constexpr int totalKeyboardHeight = regularRowsHeight + controlRowHeight + separatorsHeight + 2 * borderPadding;
@@ -244,7 +244,7 @@ void KeyboardEntryActivity::render() const {
   const int contentStartX = leftMargin + borderPadding;
 
   // Zone separator positions (draw after these rows)
-  const int zoneSeparatorAfterRows[] = {2, 5, 7};
+  const int zoneSeparatorAfterRows[] = {2, 5, 8};
   int zoneIndex = 0;
 
   for (int row = 0; row < NUM_ROWS; row++) {
