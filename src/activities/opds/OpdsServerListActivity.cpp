@@ -6,12 +6,6 @@
 #include "ThemeManager.h"
 #include "config.h"
 
-namespace {
-std::string truncateWithEllipsis(const std::string& str, size_t maxLen) {
-  if (str.length() <= maxLen) return str;
-  return str.substr(0, maxLen - 3) + "...";
-}
-}  // namespace
 
 void OpdsServerListActivity::taskTrampoline(void* param) {
   auto* self = static_cast<OpdsServerListActivity*>(param);
@@ -66,12 +60,12 @@ void OpdsServerListActivity::onExit() {
 void OpdsServerListActivity::render() const {
   renderer.clearScreen(THEME.backgroundColor);
 
+  const auto pageWidth = renderer.getScreenWidth();
+
   // Title
   renderer.drawCenteredText(THEME.readerFontId, 10, "Net Library", THEME.primaryTextBlack, BOLD);
 
-  constexpr int startY = 50;
-  constexpr int itemHeight = 55;
-  constexpr int leftMargin = 25;
+  constexpr int startY = 60;
 
   const auto& servers = OPDS_STORE.getServers();
 
@@ -81,24 +75,21 @@ void OpdsServerListActivity::render() const {
     renderer.drawCenteredText(THEME.uiFontId, 180, "Edit /opds.ini on SD card", THEME.primaryTextBlack);
     renderer.drawCenteredText(THEME.uiFontId, 210, "to add OPDS servers", THEME.primaryTextBlack);
   } else {
+    // Draw selection highlight
+    renderer.fillRect(0, startY + selectedIndex * THEME.itemHeight - 2, pageWidth - 1, THEME.itemHeight, THEME.selectionFillBlack);
+
     // Draw each server
     for (size_t i = 0; i < servers.size(); i++) {
-      const int y = startY + static_cast<int>(i) * itemHeight;
+      const int y = startY + static_cast<int>(i) * THEME.itemHeight;
       const bool isSelected = (static_cast<int>(i) == selectedIndex);
+      const bool textColor = isSelected ? THEME.selectionTextBlack : THEME.primaryTextBlack;
       const auto& server = servers[i];
 
-      const std::string displayName = truncateWithEllipsis(server.name, 30);
-
       if (isSelected) {
-        renderer.drawText(THEME.uiFontId, leftMargin, y, ">", THEME.primaryTextBlack);
-        renderer.drawText(THEME.uiFontId, leftMargin + 15, y, displayName.c_str(), THEME.primaryTextBlack, BOLD);
-      } else {
-        renderer.drawText(THEME.uiFontId, leftMargin + 15, y, displayName.c_str(), THEME.primaryTextBlack);
+        renderer.drawText(THEME.uiFontId, 5, y, ">", textColor);
       }
 
-      // Show URL below name in smaller text
-      const std::string displayUrl = truncateWithEllipsis(server.url, 35);
-      renderer.drawText(THEME.uiFontId, leftMargin + 25, y + 25, displayUrl.c_str(), THEME.primaryTextBlack);
+      renderer.drawText(THEME.uiFontId, 20, y, server.name.c_str(), textColor);
     }
   }
 

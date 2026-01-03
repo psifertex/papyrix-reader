@@ -13,7 +13,6 @@
 namespace {
 constexpr int PAGE_ITEMS = 10;
 constexpr int SKIP_PAGE_MS = 700;
-constexpr char OPDS_ROOT_PATH[] = "opds";
 
 std::string ensureProtocol(const std::string& url) {
   if (url.find("://") == std::string::npos) {
@@ -98,7 +97,7 @@ void OpdsBookBrowserActivity::onEnter() {
   state = BrowserState::WIFI_CHECK;
   entries.clear();
   navigationHistory.clear();
-  currentPath = OPDS_ROOT_PATH;
+  currentPath.clear();
   selectorIndex = 0;
   errorMessage.clear();
   statusMessage = "Connecting...";

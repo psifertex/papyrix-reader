@@ -14,6 +14,7 @@ bool HttpDownloader::fetchUrl(const std::string& url,
                               const std::string& password) {
   const std::unique_ptr<WiFiClientSecure> client(new WiFiClientSecure());
   client->setInsecure();
+  client->setHandshakeTimeout(30);  // 30 seconds for slow SSL handshakes
   HTTPClient http;
 
   Serial.printf("[%lu] [HTTP] Fetching: %s\n", millis(), url.c_str());
@@ -51,6 +52,7 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(
     const std::string& password) {
   const std::unique_ptr<WiFiClientSecure> client(new WiFiClientSecure());
   client->setInsecure();
+  client->setHandshakeTimeout(30);  // 30 seconds for slow SSL handshakes
   HTTPClient http;
 
   Serial.printf("[%lu] [HTTP] Downloading: %s\n", millis(), url.c_str());
