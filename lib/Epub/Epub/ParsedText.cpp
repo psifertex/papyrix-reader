@@ -10,6 +10,53 @@
 
 constexpr int MAX_COST = std::numeric_limits<int>::max();
 
+// Soft hyphen (U+00AD) as UTF-8 bytes
+constexpr unsigned char SOFT_HYPHEN_BYTE1 = 0xC2;
+constexpr unsigned char SOFT_HYPHEN_BYTE2 = 0xAD;
+
+namespace {
+
+// Find all soft hyphen byte positions in a UTF-8 string
+std::vector<size_t> findSoftHyphenPositions(const std::string& word) {
+  std::vector<size_t> positions;
+  for (size_t i = 0; i + 1 < word.size(); ++i) {
+    if (static_cast<unsigned char>(word[i]) == SOFT_HYPHEN_BYTE1 &&
+        static_cast<unsigned char>(word[i + 1]) == SOFT_HYPHEN_BYTE2) {
+      positions.push_back(i);
+    }
+  }
+  return positions;
+}
+
+// Remove all soft hyphens from a string
+std::string stripSoftHyphens(const std::string& word) {
+  std::string result;
+  result.reserve(word.size());
+  size_t i = 0;
+  while (i < word.size()) {
+    if (i + 1 < word.size() && static_cast<unsigned char>(word[i]) == SOFT_HYPHEN_BYTE1 &&
+        static_cast<unsigned char>(word[i + 1]) == SOFT_HYPHEN_BYTE2) {
+      i += 2;  // Skip soft hyphen
+    } else {
+      result += word[i++];
+    }
+  }
+  return result;
+}
+
+// Get word prefix before soft hyphen position (stripped) + visible hyphen
+std::string getWordPrefix(const std::string& word, size_t softHyphenPos) {
+  std::string prefix = word.substr(0, softHyphenPos);
+  return stripSoftHyphens(prefix) + "-";
+}
+
+// Get word suffix after soft hyphen position (keep soft hyphens for further splitting)
+std::string getWordSuffix(const std::string& word, size_t softHyphenPos) {
+  return word.substr(softHyphenPos + 2);  // Skip past soft hyphen bytes, DON'T strip
+}
+
+}  // namespace
+
 void ParsedText::addWord(std::string word, const EpdFontFamily::Style fontStyle) {
   if (word.empty()) return;
 
@@ -27,6 +74,12 @@ void ParsedText::layoutAndExtractLines(const GfxRenderer& renderer, const int fo
 
   const int pageWidth = viewportWidth;
   const int spaceWidth = renderer.getSpaceWidth(fontId);
+
+  // Pre-split oversized words at soft hyphen positions
+  if (hyphenationEnabled) {
+    preSplitOversizedWords(renderer, fontId, pageWidth);
+  }
+
   const auto wordWidths = calculateWordWidths(renderer, fontId);
   const auto lineBreakIndices = computeLineBreaks(pageWidth, spaceWidth, wordWidths);
   const size_t lineCount = includeLastLine ? lineBreakIndices.size() : lineBreakIndices.size() - 1;
@@ -52,7 +105,13 @@ std::vector<uint16_t> ParsedText::calculateWordWidths(const GfxRenderer& rendere
   auto wordStylesIt = wordStyles.begin();
 
   while (wordsIt != words.end()) {
-    wordWidths.push_back(renderer.getTextWidth(fontId, wordsIt->c_str(), *wordStylesIt));
+    // Strip soft hyphens before measuring (they should be invisible)
+    // After preSplitOversizedWords, words shouldn't contain soft hyphens,
+    // but we strip here for safety and for when hyphenation is disabled
+    std::string displayWord = stripSoftHyphens(*wordsIt);
+    wordWidths.push_back(renderer.getTextWidth(fontId, displayWord.c_str(), *wordStylesIt));
+    // Update the word in the list with the stripped version for rendering
+    *wordsIt = std::move(displayWord);
 
     std::advance(wordsIt, 1);
     std::advance(wordStylesIt, 1);
@@ -191,4 +250,96 @@ void ParsedText::extractLine(const size_t breakIndex, const int pageWidth, const
   wordStyles.erase(wordStyles.begin(), styleIt);
 
   processLine(std::make_shared<TextBlock>(std::move(lineData), style));
+}
+
+void ParsedText::preSplitOversizedWords(const GfxRenderer& renderer, const int fontId, const int pageWidth) {
+  std::list<std::string> newWords;
+  std::list<EpdFontFamily::Style> newStyles;
+
+  auto wordIt = words.begin();
+  auto styleIt = wordStyles.begin();
+
+  while (wordIt != words.end()) {
+    const std::string& word = *wordIt;
+    const EpdFontFamily::Style wordStyle = *styleIt;
+
+    // Measure word without soft hyphens
+    const std::string stripped = stripSoftHyphens(word);
+    const int wordWidth = renderer.getTextWidth(fontId, stripped.c_str(), wordStyle);
+
+    if (wordWidth <= pageWidth) {
+      // Word fits, keep as-is (will be stripped later in calculateWordWidths)
+      newWords.push_back(word);
+      newStyles.push_back(wordStyle);
+    } else {
+      // Word is too wide - try to split at soft hyphen positions
+      auto shyPositions = findSoftHyphenPositions(word);
+
+      if (shyPositions.empty()) {
+        // No soft hyphens, keep word as-is (will overflow)
+        newWords.push_back(word);
+        newStyles.push_back(wordStyle);
+      } else {
+        // Split word at soft hyphen positions
+        std::string remaining = word;
+
+        while (true) {
+          const std::string strippedRemaining = stripSoftHyphens(remaining);
+          const int remainingWidth = renderer.getTextWidth(fontId, strippedRemaining.c_str(), wordStyle);
+
+          if (remainingWidth <= pageWidth) {
+            // Remaining part fits, add it and done
+            newWords.push_back(remaining);
+            newStyles.push_back(wordStyle);
+            break;
+          }
+
+          // Find soft hyphen positions in remaining string
+          auto localPositions = findSoftHyphenPositions(remaining);
+          if (localPositions.empty()) {
+            // No more soft hyphens, output as-is
+            newWords.push_back(remaining);
+            newStyles.push_back(wordStyle);
+            break;
+          }
+
+          // Find the rightmost soft hyphen where prefix + hyphen fits
+          int bestPos = -1;
+          for (int i = static_cast<int>(localPositions.size()) - 1; i >= 0; --i) {
+            std::string prefix = getWordPrefix(remaining, localPositions[i]);
+            int prefixWidth = renderer.getTextWidth(fontId, prefix.c_str(), wordStyle);
+            if (prefixWidth <= pageWidth) {
+              bestPos = i;
+              break;
+            }
+          }
+
+          if (bestPos < 0) {
+            // Even the smallest prefix is too wide - output as-is
+            newWords.push_back(remaining);
+            newStyles.push_back(wordStyle);
+            break;
+          }
+
+          // Split at this position
+          std::string prefix = getWordPrefix(remaining, localPositions[bestPos]);
+          std::string suffix = getWordSuffix(remaining, localPositions[bestPos]);
+
+          newWords.push_back(prefix);  // Already includes visible hyphen "-"
+          newStyles.push_back(wordStyle);
+
+          if (suffix.empty()) {
+            break;
+          }
+          remaining = suffix;
+        }
+      }
+    }
+
+    ++wordIt;
+    ++styleIt;
+  }
+
+  words = std::move(newWords);
+  wordStyles = std::move(newStyles);
 }

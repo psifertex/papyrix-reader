@@ -70,6 +70,8 @@ class CrossPointSettings {
   uint8_t sleepTimeout = SLEEP_10_MIN;
   // Paragraph alignment for EPUB text
   uint8_t paragraphAlignment = ALIGN_JUSTIFIED;
+  // Hyphenation enabled (soft hyphen support)
+  uint8_t hyphenation = 1;
   // Theme name (loaded from /themes/<name>.theme)
   char themeName[32] = "light";
 

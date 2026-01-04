@@ -19,7 +19,7 @@ constexpr const char* orientationValues[] = {"Portrait", "Landscape CW", "Invert
 constexpr const char* sleepTimeoutValues[] = {"5 min", "10 min", "15 min", "30 min"};
 constexpr const char* paragraphAlignmentValues[] = {"Justified", "Left", "Center", "Right"};
 
-constexpr int settingsCount = 15;
+constexpr int settingsCount = 16;
 const SettingInfo settingsList[settingsCount] = {
     // Theme
     {"Theme", SettingType::THEME_SELECT, nullptr, nullptr, 0},
@@ -27,6 +27,7 @@ const SettingInfo settingsList[settingsCount] = {
     {"Font Size", SettingType::ENUM, &CrossPointSettings::fontSize, fontSizeValues, 3},
     {"Paragraph Alignment", SettingType::ENUM, &CrossPointSettings::paragraphAlignment, paragraphAlignmentValues, 4},
     {"Extra Paragraph Spacing", SettingType::TOGGLE, &CrossPointSettings::extraParagraphSpacing, nullptr, 0},
+    {"Hyphenation", SettingType::TOGGLE, &CrossPointSettings::hyphenation, nullptr, 0},
     {"Reading Orientation", SettingType::ENUM, &CrossPointSettings::orientation, orientationValues, 4},
     {"Status Bar", SettingType::ENUM, &CrossPointSettings::statusBar, statusBarValues, 3},
     {"Show Book Details", SettingType::TOGGLE, &CrossPointSettings::showBookDetails, nullptr, 0},

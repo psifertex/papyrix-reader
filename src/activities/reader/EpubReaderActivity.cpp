@@ -277,7 +277,7 @@ void EpubReaderActivity::renderScreen() {
     const auto viewportHeight = renderer.getScreenHeight() - orientedMarginTop - orientedMarginBottom;
 
     if (!section->loadSectionFile(SETTINGS.getReaderFontId(), lineCompression, SETTINGS.extraParagraphSpacing,
-                                    SETTINGS.paragraphAlignment, viewportWidth, viewportHeight)) {
+                                    SETTINGS.paragraphAlignment, SETTINGS.hyphenation, viewportWidth, viewportHeight)) {
       Serial.printf("[%lu] [ERS] Cache not found, building...\n", millis());
 
       // Show static "Indexing..." message
@@ -296,8 +296,8 @@ void EpubReaderActivity::renderScreen() {
       pagesUntilFullRefresh = 0;
 
       if (!section->createSectionFile(SETTINGS.getReaderFontId(), lineCompression, SETTINGS.extraParagraphSpacing,
-                                        SETTINGS.paragraphAlignment, viewportWidth, viewportHeight, nullptr,
-                                        nullptr)) {
+                                        SETTINGS.paragraphAlignment, SETTINGS.hyphenation, viewportWidth, viewportHeight,
+                                        nullptr, nullptr)) {
         Serial.printf("[%lu] [ERS] Failed to persist page data to SD\n", millis());
         section.reset();
         // Show error message to user
