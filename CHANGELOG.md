@@ -1,5 +1,13 @@
 
 
+## v0.8.0 (2026-01-04)
+
+*  Update docs [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
+*  Add Calibre wireless device connection support [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
+*  Rename system directory from .crosspoint to .papyrix [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
+*  Consolidate calibre.ini, opds.ini, themes/, and fonts/ under /config/.   Hide /config from file browsers [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
+
+
 ## v0.7.3 (2026-01-04)
 
 *  Update CHANGELOG [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
