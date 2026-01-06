@@ -125,6 +125,10 @@ The Settings screen allows you to configure the device's behavior:
   - Break long words at soft hyphen positions embedded in EPUB content
   - Reduces large gaps in justified text and prevents words from overflowing
 
+- **Text Anti-Aliasing** (default: ON)
+  - Enable grayscale text rendering for smoother font edges
+  - Disable for faster page turns and to eliminate the brief "thick text" flash during transitions
+
 - **Pages Per Refresh** (default: 15)
   - Options: 1, 5, 10, 15, 30
   - Number of pages to turn before performing a full e-paper refresh (clears ghosting)

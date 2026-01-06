@@ -44,6 +44,7 @@ This project is **not affiliated with Xteink**; it's built as a community projec
 - [x] Configurable font sizes (Small/Medium/Large)
 - [x] Paragraph alignment (Justified/Left/Center/Right)
 - [x] Soft hyphen support for text layout
+- [x] Text anti-aliasing toggle (grayscale text rendering)
 - [x] Pages per refresh setting (1/5/10/15/30)
 - [x] 4 screen orientations
 

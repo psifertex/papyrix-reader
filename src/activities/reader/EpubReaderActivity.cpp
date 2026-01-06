@@ -391,12 +391,12 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int or
     pagesUntilFullRefresh--;
   }
 
-  // Save bw buffer to reset buffer state after grayscale data sync
-  renderer.storeBwBuffer();
+  // Grayscale text rendering (anti-aliasing)
+  if (SETTINGS.textAntiAliasing) {
+    // Save bw buffer to reset buffer state after grayscale data sync
+    renderer.storeBwBuffer();
 
-  // grayscale rendering
-  // TODO: Only do this if font supports it
-  {
+    // TODO: Only do this if font supports it
     renderer.clearScreen(0x00);
     renderer.setRenderMode(GfxRenderer::GRAYSCALE_LSB);
     page->render(renderer, fontId, orientedMarginLeft, orientedMarginTop, THEME.primaryTextBlack);
@@ -411,10 +411,10 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int or
     // display grayscale part
     renderer.displayGrayBuffer();
     renderer.setRenderMode(GfxRenderer::BW);
-  }
 
-  // restore the bw data
-  renderer.restoreBwBuffer();
+    // restore the bw data
+    renderer.restoreBwBuffer();
+  }
 }
 
 void EpubReaderActivity::renderCoverPage(const int orientedMarginTop, const int orientedMarginRight,
