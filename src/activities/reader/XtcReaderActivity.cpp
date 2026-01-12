@@ -11,6 +11,7 @@
 #include <GfxRenderer.h>
 #include <SDCardManager.h>
 
+#include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "MappedInputManager.h"
 #include "XtcReaderChapterSelectionActivity.h"
@@ -113,6 +114,8 @@ void XtcReaderActivity::loop() {
   const bool prevReleased = mappedInput.wasReleased(MappedInputManager::Button::PageBack) ||
                             mappedInput.wasReleased(MappedInputManager::Button::Left);
   const bool nextReleased = mappedInput.wasReleased(MappedInputManager::Button::PageForward) ||
+                            (SETTINGS.shortPwrBtn == CrossPointSettings::PWRBTN_PAGE_TURN &&
+                             mappedInput.wasReleased(MappedInputManager::Button::Power)) ||
                             mappedInput.wasReleased(MappedInputManager::Button::Right);
 
   if (!prevReleased && !nextReleased) {

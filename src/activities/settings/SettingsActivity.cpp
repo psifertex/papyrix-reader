@@ -18,6 +18,7 @@ constexpr const char* pagesPerRefreshValues[] = {"1", "5", "10", "15", "30"};
 constexpr const char* orientationValues[] = {"Portrait", "Landscape CW", "Inverted", "Landscape CCW"};
 constexpr const char* autoSleepValues[] = {"5 min", "10 min", "15 min", "30 min", "Never"};
 constexpr const char* paragraphAlignmentValues[] = {"Justified", "Left", "Center", "Right"};
+constexpr const char* shortPwrBtnValues[] = {"Ignore", "Sleep", "Page Turn"};
 
 constexpr int settingsCount = 17;
 const SettingInfo settingsList[settingsCount] = {
@@ -36,7 +37,7 @@ const SettingInfo settingsList[settingsCount] = {
     {"Pages Per Refresh", SettingType::ENUM, &CrossPointSettings::pagesPerRefresh, pagesPerRefreshValues, 5},
     {"Auto Sleep Timeout", SettingType::ENUM, &CrossPointSettings::autoSleepMinutes, autoSleepValues, 5},
     {"Sleep Screen", SettingType::ENUM, &CrossPointSettings::sleepScreen, sleepScreenValues, 4},
-    {"Short Power Button Click", SettingType::TOGGLE, &CrossPointSettings::shortPwrBtn, nullptr, 0},
+    {"Short Power Button", SettingType::ENUM, &CrossPointSettings::shortPwrBtn, shortPwrBtnValues, 3},
     // Actions
     {"Net Library", SettingType::ACTION, nullptr, nullptr, 0},
     {"Calibre Wireless", SettingType::ACTION, nullptr, nullptr, 0},

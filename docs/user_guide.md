@@ -136,8 +136,11 @@ The Settings screen allows you to configure the device's behavior:
 - **Show Book Details** (default: ON)
   - Display book cover as first page when reading, and title/author on home screen
 
-- **Short Power Button Click** (default: OFF)
-  - Whether to trigger power on a short press (ON) or long press (OFF)
+- **Short Power Button** (default: Ignore)
+  - Options: Ignore, Sleep, Page Turn
+  - **Ignore:** Short press does nothing (long press for sleep)
+  - **Sleep:** Short press puts device to sleep
+  - **Page Turn:** Short press turns to next page while reading (convenient for one-handed reading)
 
 - **Reading Orientation** (default: Portrait)
   - Options: Portrait, Landscape CW, Inverted, Landscape CCW
@@ -305,6 +308,7 @@ Once you have opened a book, the button layout changes to facilitate reading.
 
 - **Previous Page:** Press **Left** or **Volume Up**
 - **Next Page:** Press **Right** or **Volume Down**
+- **Power Button:** When **Short Power Button** is set to **Page Turn** in Settings, pressing the power button also turns to the next page (convenient for one-handed reading)
 
 ### Chapter Navigation
 * **Next Chapter:** Press and **hold** the **Right** (or **Volume Down**) button briefly, then release.

@@ -46,14 +46,17 @@ class CrossPointSettings {
   // Paragraph alignment options (values match TextBlock::BLOCK_STYLE)
   enum PARAGRAPH_ALIGNMENT { ALIGN_JUSTIFIED = 0, ALIGN_LEFT = 1, ALIGN_CENTER = 2, ALIGN_RIGHT = 3 };
 
+  // Short power button press actions
+  enum SHORT_PWRBTN { PWRBTN_IGNORE = 0, PWRBTN_SLEEP = 1, PWRBTN_PAGE_TURN = 2 };
+
   // Sleep screen settings
   uint8_t sleepScreen = DARK;
   // Status bar settings
   uint8_t statusBar = FULL;
   // Text rendering settings
   uint8_t extraParagraphSpacing = 1;
-  // Duration of the power button press
-  uint8_t shortPwrBtn = 0;
+  // Short power button click behaviour
+  uint8_t shortPwrBtn = PWRBTN_IGNORE;
   // EPUB reading orientation settings
   // 0 = portrait (default), 1 = landscape clockwise, 2 = inverted, 3 = landscape counter-clockwise
   uint8_t orientation = PORTRAIT;
@@ -82,7 +85,9 @@ class CrossPointSettings {
   // Get singleton instance
   static CrossPointSettings& getInstance() { return instance; }
 
-  uint16_t getPowerButtonDuration() const { return shortPwrBtn ? 10 : 400; }
+  uint16_t getPowerButtonDuration() const {
+    return (shortPwrBtn == PWRBTN_SLEEP) ? 10 : 400;
+  }
 
   uint32_t getAutoSleepTimeoutMs() const {
     switch (autoSleepMinutes) {
