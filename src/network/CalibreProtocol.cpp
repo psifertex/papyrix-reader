@@ -105,7 +105,12 @@ bool parseMessage(WiFiClient& client, uint8_t& opcode, std::string& jsonData, un
   }
 
   try {
-    opcode = static_cast<uint8_t>(std::stoul(opcodeStr));
+    const unsigned long opcodeValue = std::stoul(opcodeStr);
+    if (opcodeValue > 255) {
+      Serial.printf("[CAL] Opcode value out of range: %lu\n", opcodeValue);
+      return false;
+    }
+    opcode = static_cast<uint8_t>(opcodeValue);
   } catch (const std::exception&) {
     Serial.printf("[CAL] Failed to parse opcode: %s\n", opcodeStr.c_str());
     return false;
@@ -171,7 +176,7 @@ std::string computePasswordHash(const std::string& password, const std::string& 
   // Convert to hex string
   char hexHash[41];
   for (int i = 0; i < 20; i++) {
-    sprintf(hexHash + i * 2, "%02x", hash[i]);
+    snprintf(hexHash + i * 2, 3, "%02x", hash[i]);
   }
   hexHash[40] = '\0';
 

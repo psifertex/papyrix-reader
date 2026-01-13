@@ -105,6 +105,10 @@ void exitActivity() {
 }
 
 void enterNewActivity(Activity* activity) {
+  if (!activity) {
+    Serial.printf("[%lu] [ERR] enterNewActivity called with null activity\n", millis());
+    return;
+  }
   currentActivity = activity;
   currentActivity->onEnter();
 }

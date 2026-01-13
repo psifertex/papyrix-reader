@@ -116,6 +116,12 @@ void IniParser::trimWhitespace(char* str) {
   char* start = str;
   while (isspace((unsigned char)*start)) start++;
 
+  // Handle all-whitespace string
+  if (!*start) {
+    *str = '\0';
+    return;
+  }
+
   // Trim trailing
   char* end = start + strlen(start) - 1;
   while (end > start && isspace((unsigned char)*end)) end--;

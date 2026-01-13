@@ -135,7 +135,10 @@ XtcError XtcParser::readTitle() {
   }
 
   char titleBuf[128] = {0};
-  m_file.read(reinterpret_cast<uint8_t*>(titleBuf), sizeof(titleBuf) - 1);
+  const int bytesRead = m_file.read(reinterpret_cast<uint8_t*>(titleBuf), sizeof(titleBuf) - 1);
+  if (bytesRead <= 0) {
+    Serial.printf("[%lu] [XTC] Warning: Failed to read title (read returned %d)\n", millis(), bytesRead);
+  }
   m_title = titleBuf;
 
   Serial.printf("[%lu] [XTC] Title: %s\n", millis(), m_title.c_str());
