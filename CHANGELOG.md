@@ -1,5 +1,23 @@
 
 
+## v0.12.0 (2026-01-13)
+
+*  Settings: Add Clear Cache option to delete all book caches [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
+*  ClearCache: Use styled buttons matching main UI [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
+*  StatusBar: Use dynamic margin for chapter title when battery hidden [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
+*  Reader: Preserve page refresh counter across chapter boundaries [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
+*  HomeActivity: Increase task stack size to prevent crashes [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
+*  Epub: Fix TOC navigation when nav file is in subdirectory [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
+*  Fix signed/unsigned mismatches, unaligned memory access, and add defensive checks [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
+
+
+## v0.11.0 (2026-01-13)
+
+*  Update CHANGELOG [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
+*  TOC: Use theme item height for consistent long-press navigation [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
+*  Add theme font support with example light themes and refactored font converter [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
+
+
 ## v0.10.0 (2026-01-13)
 
 *  Fix BMP rendering gamma/brightness (#302) [[Jonas Diemer](mailto:jonasdiemer@gmail.com)]
