@@ -111,23 +111,28 @@ void GfxRenderer::drawText(const int fontId, const int x, const int y, const cha
 }
 
 void GfxRenderer::drawLine(int x1, int y1, int x2, int y2, const bool state) const {
-  if (x1 == x2) {
-    if (y2 < y1) {
-      std::swap(y1, y2);
+  int dx = abs(x2 - x1);
+  int dy = abs(y2 - y1);
+  int sx = (x1 < x2) ? 1 : -1;
+  int sy = (y1 < y2) ? 1 : -1;
+  int err = dx - dy;
+
+  while (true) {
+    drawPixel(x1, y1, state);
+
+    if (x1 == x2 && y1 == y2) break;
+
+    int e2 = 2 * err;
+
+    if (e2 > -dy) {
+      err -= dy;
+      x1 += sx;
     }
-    for (int y = y1; y <= y2; y++) {
-      drawPixel(x1, y, state);
+
+    if (e2 < dx) {
+      err += dx;
+      y1 += sy;
     }
-  } else if (y1 == y2) {
-    if (x2 < x1) {
-      std::swap(x1, x2);
-    }
-    for (int x = x1; x <= x2; x++) {
-      drawPixel(x, y1, state);
-    }
-  } else {
-    // TODO: Implement
-    Serial.printf("[%lu] [GFX] Line drawing not supported\n", millis());
   }
 }
 
