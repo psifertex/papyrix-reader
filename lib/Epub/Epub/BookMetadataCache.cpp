@@ -4,7 +4,6 @@
 #include <Serialization.h>
 #include <ZipFile.h>
 
-#include <algorithm>
 #include <vector>
 
 #include "FsHelpers.h"
@@ -51,12 +50,12 @@ bool BookMetadataCache::beginTocPass() {
   }
 
   // Pre-load spine hrefs for O(1) lookup during TOC entry creation
-  spineHrefs.clear();
-  spineHrefs.reserve(spineCount);
+  spineHrefIndex.clear();
+  spineHrefIndex.reserve(spineCount);
   spineFile.seek(0);
   for (int i = 0; i < spineCount; i++) {
     auto entry = readSpineEntry(spineFile);
-    spineHrefs.push_back(std::move(entry.href));
+    spineHrefIndex[entry.href] = i;
   }
   Serial.printf("[%lu] [BMC] Cached %d spine hrefs for fast lookup\n", millis(), spineCount);
 
@@ -68,8 +67,7 @@ bool BookMetadataCache::endTocPass() {
   spineFile.close();
 
   // Free cached spine hrefs memory
-  spineHrefs.clear();
-  spineHrefs.shrink_to_fit();
+  spineHrefIndex.clear();
 
   return true;
 }
@@ -272,11 +270,11 @@ void BookMetadataCache::createTocEntry(const std::string& title, const std::stri
     return;
   }
 
-  // O(n) lookup using cached spine hrefs instead of O(n) disk reads per TOC entry
+  // O(1) lookup using cached spine href index
   int spineIndex = -1;
-  auto it = std::find(spineHrefs.begin(), spineHrefs.end(), href);
-  if (it != spineHrefs.end()) {
-    spineIndex = static_cast<int>(std::distance(spineHrefs.begin(), it));
+  auto it = spineHrefIndex.find(href);
+  if (it != spineHrefIndex.end()) {
+    spineIndex = it->second;
   }
 
   if (spineIndex == -1) {
