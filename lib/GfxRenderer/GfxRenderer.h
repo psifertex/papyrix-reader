@@ -59,6 +59,7 @@ class GfxRenderer {
   void displayWindow(int x, int y, int width, int height) const;
   void invertScreen() const;
   void clearScreen(uint8_t color = 0xFF) const;
+  void clearArea(int x, int y, int width, int height, uint8_t color = 0xFF) const;
 
   // Drawing
   void drawPixel(int x, int y, bool state = true) const;

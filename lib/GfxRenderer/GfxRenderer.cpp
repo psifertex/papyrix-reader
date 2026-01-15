@@ -228,6 +228,36 @@ void GfxRenderer::drawBitmap(const Bitmap& bitmap, const int x, const int y, con
 
 void GfxRenderer::clearScreen(const uint8_t color) const { einkDisplay.clearScreen(color); }
 
+void GfxRenderer::clearArea(const int x, const int y, const int width, const int height, const uint8_t color) const {
+  uint8_t* frameBuffer = einkDisplay.getFrameBuffer();
+  if (!frameBuffer || width <= 0 || height <= 0) {
+    return;
+  }
+
+  // Validate bounds - region entirely outside display
+  if (x >= static_cast<int>(EInkDisplay::DISPLAY_WIDTH) || y >= static_cast<int>(EInkDisplay::DISPLAY_HEIGHT) ||
+      x + width <= 0 || y + height <= 0) {
+    return;
+  }
+
+  // Clamp to display boundaries
+  const int x_start = std::max(x, 0);
+  const int y_start = std::max(y, 0);
+  const int x_end = std::min(x + width - 1, static_cast<int>(EInkDisplay::DISPLAY_WIDTH - 1));
+  const int y_end = std::min(y + height - 1, static_cast<int>(EInkDisplay::DISPLAY_HEIGHT - 1));
+
+  // Calculate byte boundaries (8 pixels per byte)
+  const int x_byte_start = x_start / 8;
+  const int x_byte_end = x_end / 8;
+  const int byte_width = x_byte_end - x_byte_start + 1;
+
+  // Clear each row in the region
+  for (int row = y_start; row <= y_end; row++) {
+    const uint32_t buffer_offset = row * EInkDisplay::DISPLAY_WIDTH_BYTES + x_byte_start;
+    memset(&frameBuffer[buffer_offset], color, byte_width);
+  }
+}
+
 void GfxRenderer::invertScreen() const {
   uint8_t* buffer = einkDisplay.getFrameBuffer();
   if (!buffer) {
