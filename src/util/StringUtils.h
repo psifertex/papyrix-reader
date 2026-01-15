@@ -24,4 +24,15 @@ bool isXtcFile(const std::string& path);            // .xtc or .xtch
 bool isTxtFile(const std::string& path);            // .txt or .text
 bool isSupportedBookFile(const std::string& path);  // epub, xtc, xtch, txt, text
 
+/**
+ * UTF-8 safe string truncation - removes one character from the end.
+ * Returns the new size after removing one UTF-8 character.
+ */
+size_t utf8RemoveLastChar(std::string& str);
+
+/**
+ * UTF-8 safe truncation - removes N characters from the end.
+ */
+void utf8TruncateChars(std::string& str, size_t numChars);
+
 }  // namespace StringUtils

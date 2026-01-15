@@ -1,5 +1,6 @@
 #include "StringUtils.h"
 
+#include <Utf8.h>
 #include <cstring>
 
 namespace StringUtils {
@@ -60,5 +61,9 @@ bool isTxtFile(const std::string& path) {
 }
 
 bool isSupportedBookFile(const std::string& path) { return isEpubFile(path) || isXtcFile(path) || isTxtFile(path); }
+
+size_t utf8RemoveLastChar(std::string& str) { return ::utf8RemoveLastChar(str); }
+
+void utf8TruncateChars(std::string& str, size_t numChars) { ::utf8TruncateChars(str, numChars); }
 
 }  // namespace StringUtils

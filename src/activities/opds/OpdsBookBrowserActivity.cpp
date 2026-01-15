@@ -10,6 +10,7 @@
 #include "activities/util/KeyboardEntryActivity.h"
 #include "config.h"
 #include "network/HttpDownloader.h"
+#include "util/StringUtils.h"
 
 namespace {
 constexpr int PAGE_ITEMS = 10;
@@ -49,7 +50,15 @@ std::string buildUrl(const std::string& serverUrl, const std::string& path) {
 
 std::string truncateWithEllipsis(const std::string& str, size_t maxLen) {
   if (str.length() <= maxLen) return str;
-  return str.substr(0, maxLen - 3) + "...";
+  if (maxLen < 4) return "...";  // Not enough room for content + ellipsis
+
+  std::string result = str;
+  // Remove UTF-8 characters until we have room for "..."
+  while (result.length() > maxLen - 3) {
+    StringUtils::utf8RemoveLastChar(result);
+    if (result.empty()) break;
+  }
+  return result + "...";
 }
 
 std::string urlEncode(const std::string& input) {
