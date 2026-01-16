@@ -69,13 +69,15 @@ EpdFontFamily readerFontFamily(&readerFont, &readerBoldFont, &readerItalicFont, 
 EpdFont readerMediumFont(&reader_medium_2b);
 EpdFont readerMediumBoldFont(&reader_medium_bold_2b);
 EpdFont readerMediumItalicFont(&reader_medium_italic_2b);
-EpdFontFamily readerMediumFontFamily(&readerMediumFont, &readerMediumBoldFont, &readerMediumItalicFont, &readerMediumBoldFont);
+EpdFontFamily readerMediumFontFamily(&readerMediumFont, &readerMediumBoldFont, &readerMediumItalicFont,
+                                     &readerMediumBoldFont);
 
 // Fonts - Large (18pt)
 EpdFont readerLargeFont(&reader_large_2b);
 EpdFont readerLargeBoldFont(&reader_large_bold_2b);
 EpdFont readerLargeItalicFont(&reader_large_italic_2b);
-EpdFontFamily readerLargeFontFamily(&readerLargeFont, &readerLargeBoldFont, &readerLargeItalicFont, &readerLargeBoldFont);
+EpdFontFamily readerLargeFontFamily(&readerLargeFont, &readerLargeBoldFont, &readerLargeItalicFont,
+                                    &readerLargeBoldFont);
 
 EpdFont smallFont(&small14);
 EpdFontFamily smallFontFamily(&smallFont);

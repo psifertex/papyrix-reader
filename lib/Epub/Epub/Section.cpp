@@ -1,5 +1,6 @@
 #include "Section.h"
 
+#include <Html5Normalizer.h>
 #include <SDCardManager.h>
 #include <Serialization.h>
 
@@ -168,12 +169,24 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
 
   Serial.printf("[%lu] [SCT] Streamed temp HTML to %s (%d bytes)\n", millis(), tmpHtmlPath.c_str(), fileSize);
 
+  // Normalize HTML5 void elements to XHTML self-closing format for Expat parser
+  const auto normalizedPath = epub->getCachePath() + "/.norm_" + std::to_string(spineIndex) + ".html";
+  std::string parseHtmlPath = tmpHtmlPath;
+  if (html5::normalizeVoidElements(tmpHtmlPath, normalizedPath)) {
+    parseHtmlPath = normalizedPath;
+    Serial.printf("[%lu] [SCT] Normalized HTML5 void elements\n", millis());
+  } else {
+    Serial.printf("[%lu] [SCT] Failed to normalize HTML, continuing with original\n", millis());
+  }
+
   // Only show progress bar for larger chapters where rendering overhead is worth it
   if (progressSetupFn && fileSize >= MIN_SIZE_FOR_PROGRESS) {
     progressSetupFn();
   }
 
   if (!SdMan.openFileForWrite("SCT", filePath, file)) {
+    SdMan.remove(tmpHtmlPath.c_str());
+    SdMan.remove(normalizedPath.c_str());
     return false;
   }
   writeSectionFileHeader(fontId, lineCompression, extraParagraphSpacing, paragraphAlignment, hyphenation, viewportWidth,
@@ -181,13 +194,14 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
   std::vector<uint32_t> lut = {};
 
   ChapterHtmlSlimParser visitor(
-      tmpHtmlPath, renderer, fontId, lineCompression, extraParagraphSpacing, paragraphAlignment, hyphenation,
+      parseHtmlPath, renderer, fontId, lineCompression, extraParagraphSpacing, paragraphAlignment, hyphenation,
       viewportWidth, viewportHeight,
       [this, &lut](std::unique_ptr<Page> page) { lut.emplace_back(this->onPageComplete(std::move(page))); },
       progressFn);
   success = visitor.parseAndBuildPages();
 
   SdMan.remove(tmpHtmlPath.c_str());
+  SdMan.remove(normalizedPath.c_str());
   if (!success) {
     Serial.printf("[%lu] [SCT] Failed to parse XML and build pages\n", millis());
     file.close();
