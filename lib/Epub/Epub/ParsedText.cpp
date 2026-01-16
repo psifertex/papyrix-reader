@@ -1,6 +1,7 @@
 #include "ParsedText.h"
 
 #include <GfxRenderer.h>
+#include <Utf8.h>
 
 #include <algorithm>
 #include <cmath>
@@ -55,13 +56,103 @@ std::string getWordSuffix(const std::string& word, size_t softHyphenPos) {
   return word.substr(softHyphenPos + 2);  // Skip past soft hyphen bytes, DON'T strip
 }
 
+// Check if codepoint is CJK ideograph (Unicode Line Break Class ID)
+// Based on UAX #14 - allows line break before/after these characters
+bool isCjkCodepoint(uint32_t cp) {
+  // CJK Unified Ideographs
+  if (cp >= 0x4E00 && cp <= 0x9FFF) return true;
+  // CJK Extension A
+  if (cp >= 0x3400 && cp <= 0x4DBF) return true;
+  // CJK Compatibility Ideographs
+  if (cp >= 0xF900 && cp <= 0xFAFF) return true;
+  // Hiragana
+  if (cp >= 0x3040 && cp <= 0x309F) return true;
+  // Katakana
+  if (cp >= 0x30A0 && cp <= 0x30FF) return true;
+  // Hangul Syllables
+  if (cp >= 0xAC00 && cp <= 0xD7AF) return true;
+  // CJK Extension B and beyond (Plane 2)
+  if (cp >= 0x20000 && cp <= 0x2A6DF) return true;
+  // Fullwidth ASCII variants (often used in CJK context)
+  if (cp >= 0xFF00 && cp <= 0xFFEF) return true;
+  return false;
+}
+
 }  // namespace
 
 void ParsedText::addWord(std::string word, const EpdFontFamily::Style fontStyle) {
   if (word.empty()) return;
 
-  words.push_back(std::move(word));
-  wordStyles.push_back(fontStyle);
+  // Check if word contains any CJK characters
+  bool hasCjk = false;
+  const unsigned char* check = reinterpret_cast<const unsigned char*>(word.c_str());
+  uint32_t cp;
+  while ((cp = utf8NextCodepoint(&check))) {
+    if (isCjkCodepoint(cp)) {
+      hasCjk = true;
+      break;
+    }
+  }
+
+  if (!hasCjk) {
+    // No CJK - keep as single word (Latin, accented Latin, Cyrillic, etc.)
+    words.push_back(std::move(word));
+    wordStyles.push_back(fontStyle);
+    return;
+  }
+
+  // Mixed content: group non-CJK runs together, split CJK individually
+  const unsigned char* p = reinterpret_cast<const unsigned char*>(word.c_str());
+  std::string nonCjkBuf;
+
+  while ((cp = utf8NextCodepoint(&p))) {
+    if (isCjkCodepoint(cp)) {
+      // CJK character - flush non-CJK buffer first, then add this char alone
+      if (!nonCjkBuf.empty()) {
+        words.push_back(std::move(nonCjkBuf));
+        wordStyles.push_back(fontStyle);
+        nonCjkBuf.clear();
+      }
+
+      // Re-encode CJK codepoint to UTF-8
+      std::string buf;
+      if (cp < 0x10000) {
+        buf += static_cast<char>(0xE0 | (cp >> 12));
+        buf += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+        buf += static_cast<char>(0x80 | (cp & 0x3F));
+      } else {
+        buf += static_cast<char>(0xF0 | (cp >> 18));
+        buf += static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
+        buf += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+        buf += static_cast<char>(0x80 | (cp & 0x3F));
+      }
+      words.push_back(buf);
+      wordStyles.push_back(fontStyle);
+    } else {
+      // Non-CJK character - accumulate into buffer
+      if (cp < 0x80) {
+        nonCjkBuf += static_cast<char>(cp);
+      } else if (cp < 0x800) {
+        nonCjkBuf += static_cast<char>(0xC0 | (cp >> 6));
+        nonCjkBuf += static_cast<char>(0x80 | (cp & 0x3F));
+      } else if (cp < 0x10000) {
+        nonCjkBuf += static_cast<char>(0xE0 | (cp >> 12));
+        nonCjkBuf += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+        nonCjkBuf += static_cast<char>(0x80 | (cp & 0x3F));
+      } else {
+        nonCjkBuf += static_cast<char>(0xF0 | (cp >> 18));
+        nonCjkBuf += static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
+        nonCjkBuf += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+        nonCjkBuf += static_cast<char>(0x80 | (cp & 0x3F));
+      }
+    }
+  }
+
+  // Flush any remaining non-CJK buffer
+  if (!nonCjkBuf.empty()) {
+    words.push_back(std::move(nonCjkBuf));
+    wordStyles.push_back(fontStyle);
+  }
 }
 
 // Consumes data to minimize memory usage

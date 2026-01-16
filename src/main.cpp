@@ -258,7 +258,10 @@ void setupDisplayAndFonts() {
 void applyThemeFonts() {
   Theme& theme = THEME_MANAGER.mutableCurrent();
 
-  // Apply custom UI font if specified
+  // Reset UI font to builtin first in case custom font loading fails
+  theme.uiFontId = UI_FONT_ID;
+
+  // Apply custom UI font if specified (small, always safe to load)
   if (theme.uiFontFamily[0] != '\0') {
     int customUiFontId = FONT_MANAGER.getFontId(theme.uiFontFamily, UI_FONT_ID);
     if (customUiFontId != UI_FONT_ID) {
@@ -267,31 +270,38 @@ void applyThemeFonts() {
     }
   }
 
-  // Apply custom reader fonts for each size
-  if (theme.readerFontFamilySmall[0] != '\0') {
-    int customFontId = FONT_MANAGER.getFontId(theme.readerFontFamilySmall, READER_FONT_ID);
-    if (customFontId != READER_FONT_ID) {
-      theme.readerFontId = customFontId;
-      Serial.printf("[%lu] [FONT] Reader font (small): %s (ID: %d)\n", millis(), theme.readerFontFamilySmall,
-                    customFontId);
-    }
+  // Only load the reader font that matches current font size setting
+  // This saves ~500KB+ of RAM by not loading all three sizes
+  const char* fontFamilyName = nullptr;
+  int* targetFontId = nullptr;
+  int builtinFontId = 0;
+
+  switch (SETTINGS.fontSize) {
+    case CrossPointSettings::FONT_MEDIUM:
+      fontFamilyName = theme.readerFontFamilyMedium;
+      targetFontId = &theme.readerFontIdMedium;
+      builtinFontId = READER_FONT_ID_MEDIUM;
+      break;
+    case CrossPointSettings::FONT_LARGE:
+      fontFamilyName = theme.readerFontFamilyLarge;
+      targetFontId = &theme.readerFontIdLarge;
+      builtinFontId = READER_FONT_ID_LARGE;
+      break;
+    default:  // FONT_SMALL
+      fontFamilyName = theme.readerFontFamilySmall;
+      targetFontId = &theme.readerFontId;
+      builtinFontId = READER_FONT_ID;
+      break;
   }
 
-  if (theme.readerFontFamilyMedium[0] != '\0') {
-    int customFontId = FONT_MANAGER.getFontId(theme.readerFontFamilyMedium, READER_FONT_ID_MEDIUM);
-    if (customFontId != READER_FONT_ID_MEDIUM) {
-      theme.readerFontIdMedium = customFontId;
-      Serial.printf("[%lu] [FONT] Reader font (medium): %s (ID: %d)\n", millis(), theme.readerFontFamilyMedium,
-                    customFontId);
-    }
-  }
+  // Reset to builtin first in case custom font loading fails
+  *targetFontId = builtinFontId;
 
-  if (theme.readerFontFamilyLarge[0] != '\0') {
-    int customFontId = FONT_MANAGER.getFontId(theme.readerFontFamilyLarge, READER_FONT_ID_LARGE);
-    if (customFontId != READER_FONT_ID_LARGE) {
-      theme.readerFontIdLarge = customFontId;
-      Serial.printf("[%lu] [FONT] Reader font (large): %s (ID: %d)\n", millis(), theme.readerFontFamilyLarge,
-                    customFontId);
+  if (fontFamilyName && fontFamilyName[0] != '\0') {
+    int customFontId = FONT_MANAGER.getFontId(fontFamilyName, builtinFontId);
+    if (customFontId != builtinFontId) {
+      *targetFontId = customFontId;
+      Serial.printf("[%lu] [FONT] Reader font: %s (ID: %d)\n", millis(), fontFamilyName, customFontId);
     }
   }
 }

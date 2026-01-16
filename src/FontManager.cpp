@@ -36,34 +36,22 @@ bool FontManager::loadFontFamily(const char* familyName, int fontId) {
   LoadedFamily family;
   family.fontId = fontId;
 
-  // Try to load each style
-  const char* styles[] = {"regular", "bold", "italic", "bold_italic"};
-  EpdFont* fontPtrs[4] = {nullptr, nullptr, nullptr, nullptr};
+  // Only load regular font to save memory (~150KB savings)
+  // Bold/italic/bold_italic will use the same regular font
+  char fontPath[80];
+  snprintf(fontPath, sizeof(fontPath), "%s/regular.epdfont", basePath);
 
-  for (int i = 0; i < 4; i++) {
-    char fontPath[80];
-    snprintf(fontPath, sizeof(fontPath), "%s/%s.epdfont", basePath, styles[i]);
-
-    LoadedFont loaded = loadSingleFont(fontPath);
-    if (loaded.font) {
-      family.fonts.push_back(loaded);
-      fontPtrs[i] = loaded.font;
-      Serial.printf("[FONT] Loaded %s/%s\n", familyName, styles[i]);
-    }
-  }
-
-  // Need at least regular font
-  if (!fontPtrs[0]) {
-    // Free any loaded fonts
-    for (auto& f : family.fonts) {
-      freeFont(f);
-    }
+  LoadedFont loaded = loadSingleFont(fontPath);
+  if (!loaded.font) {
     Serial.printf("[FONT] Failed to load regular font for %s\n", familyName);
     return false;
   }
 
-  // Create font family and register with renderer
-  EpdFontFamily fontFamily(fontPtrs[0], fontPtrs[1], fontPtrs[2], fontPtrs[3]);
+  family.fonts.push_back(loaded);
+  Serial.printf("[FONT] Loaded %s/regular (bold/italic use same)\n", familyName);
+
+  // Create font family with regular font for all styles
+  EpdFontFamily fontFamily(loaded.font, loaded.font, loaded.font, loaded.font);
   renderer->insertFont(fontId, fontFamily);
 
   // Store for cleanup

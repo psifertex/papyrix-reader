@@ -4,6 +4,7 @@
 
 #include "ClearCacheConfirmActivity.h"
 #include "CrossPointSettings.h"
+#include "FontManager.h"
 #include "MappedInputManager.h"
 #include "OtaUpdateActivity.h"
 #include "SystemInfoActivity.h"
@@ -152,6 +153,11 @@ void SettingsActivity::toggleCurrentSetting() {
   } else if (setting.type == SettingType::ENUM && setting.valuePtr != nullptr) {
     const uint8_t currentValue = SETTINGS.*(setting.valuePtr);
     SETTINGS.*(setting.valuePtr) = (currentValue + 1) % setting.enumCount;
+    // If font size changed, reload custom fonts for new size
+    if (setting.valuePtr == &CrossPointSettings::fontSize) {
+      FONT_MANAGER.unloadAllFonts();
+      applyThemeFonts();
+    }
   } else if (setting.type == SettingType::THEME_SELECT) {
     // Cycle through available themes
     if (!availableThemes.empty()) {
@@ -161,6 +167,9 @@ void SettingsActivity::toggleCurrentSetting() {
       SETTINGS.themeName[sizeof(SETTINGS.themeName) - 1] = '\0';
       // Apply the theme immediately
       THEME_MANAGER.loadTheme(SETTINGS.themeName);
+      // Reload fonts for new theme
+      FONT_MANAGER.unloadAllFonts();
+      applyThemeFonts();
     }
   } else if (setting.type == SettingType::ACTION) {
     if (std::string(setting.name) == "System Info") {

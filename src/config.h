@@ -62,3 +62,7 @@
 #define CONFIG_OPDS_FILE CONFIG_DIR "/opds.ini"
 #define CONFIG_THEMES_DIR CONFIG_DIR "/themes"
 #define CONFIG_FONTS_DIR CONFIG_DIR "/fonts"
+
+// Applies custom theme fonts for the currently selected font size.
+// Call this after font size or theme changes to reload fonts.
+void applyThemeFonts();

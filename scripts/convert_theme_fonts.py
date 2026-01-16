@@ -30,8 +30,8 @@ except ImportError:
 MAGIC = 0x46445045  # "EPDF" in little-endian
 VERSION = 1
 
-# Unicode intervals to include
-INTERVALS = [
+# Unicode intervals - base set (Latin, Cyrillic, punctuation)
+INTERVALS_BASE = [
     # Basic Latin (ASCII)
     (0x0000, 0x007F),
     # Latin-1 Supplement
@@ -55,6 +55,51 @@ INTERVALS = [
     # Arrows
     (0x2190, 0x21FF),
 ]
+
+# CJK intervals - full set (~32,000 chars, results in large files ~4MB+)
+INTERVALS_CJK_FULL = [
+    # CJK Symbols and Punctuation
+    (0x3000, 0x303F),
+    # Hiragana (Japanese)
+    (0x3040, 0x309F),
+    # Katakana (Japanese)
+    (0x30A0, 0x30FF),
+    # CJK Unified Ideographs - FULL (20,992 chars)
+    (0x4E00, 0x9FFF),
+    # Hangul Jamo (Korean)
+    (0x1100, 0x11FF),
+    # Hangul Compatibility Jamo (Korean)
+    (0x3130, 0x318F),
+    # Hangul Syllables - FULL (11,172 chars)
+    (0xAC00, 0xD7AF),
+    # Halfwidth and Fullwidth Forms
+    (0xFF00, 0xFFEF),
+]
+
+# CJK intervals - common subset (~3,500 chars, fits in 2MB limit)
+# Covers ~99% of typical Chinese/Korean text
+INTERVALS_CJK_COMMON = [
+    # CJK Symbols and Punctuation
+    (0x3000, 0x303F),
+    # Hiragana (Japanese)
+    (0x3040, 0x309F),
+    # Katakana (Japanese)
+    (0x30A0, 0x30FF),
+    # CJK Unified Ideographs - Common subset (~3,500 most frequent chars)
+    # This range contains the most commonly used Chinese characters
+    (0x4E00, 0x5DFF),
+    # Hangul Jamo (Korean)
+    (0x1100, 0x11FF),
+    # Hangul Compatibility Jamo (Korean)
+    (0x3130, 0x318F),
+    # Hangul Syllables - Common subset (~2,350 most frequent)
+    (0xAC00, 0xB5FF),
+    # Fullwidth ASCII and punctuation
+    (0xFF00, 0xFF5F),
+]
+
+# Default: base + full CJK
+INTERVALS = INTERVALS_BASE + INTERVALS_CJK_FULL
 
 GlyphProps = namedtuple("GlyphProps", [
     "width", "height", "advance_x", "left", "top", "data_length", "data_offset", "code_point"
@@ -295,8 +340,15 @@ Output structure:
     parser.add_argument("-s", "--size", type=int, default=16, help="Font size in points (default: 16)")
     parser.add_argument("--2bit", dest="is_2bit", action="store_true", help="Generate 2-bit grayscale (smoother but larger)")
     parser.add_argument("--all-sizes", action="store_true", help="Generate all reader font sizes (14, 16, 18pt)")
+    parser.add_argument("--cjk-common", action="store_true", help="Use reduced CJK character set (~3,500 chars) to fit in 2MB limit")
 
     args = parser.parse_args()
+
+    # Select interval set based on --cjk-common flag
+    global INTERVALS
+    if args.cjk_common:
+        INTERVALS = INTERVALS_BASE + INTERVALS_CJK_COMMON
+        print("Using reduced CJK character set (~3,500 chars)")
 
     output_base = Path(args.output)
 
