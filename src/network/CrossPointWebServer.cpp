@@ -163,7 +163,7 @@ void CrossPointWebServer::handleStatus() const {
   const String ipAddr = apMode ? WiFi.softAPIP().toString() : WiFi.localIP().toString();
 
   String json = "{";
-  json += "\"version\":\"" + String(CROSSPOINT_VERSION) + "\",";
+  json += "\"version\":\"" + String(PAPYRIX_VERSION) + "\",";
   json += "\"ip\":\"" + ipAddr + "\",";
   json += "\"mode\":\"" + String(apMode ? "AP" : "STA") + "\",";
   json += "\"rssi\":" + String(apMode ? 0 : WiFi.RSSI()) + ",";  // RSSI not applicable in AP mode

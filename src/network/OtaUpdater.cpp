@@ -17,7 +17,7 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
   Serial.printf("[%lu] [OTA] Fetching: %s\n", millis(), latestReleaseUrl);
 
   http.begin(*client, latestReleaseUrl);
-  http.addHeader("User-Agent", "CrossPoint-ESP32-" CROSSPOINT_VERSION);
+  http.addHeader("User-Agent", "Papyrix-ESP32-" PAPYRIX_VERSION);
 
   const int httpCode = http.GET();
   if (httpCode != HTTP_CODE_OK) {
@@ -70,7 +70,7 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
 }
 
 bool OtaUpdater::isUpdateNewer() {
-  if (!updateAvailable || latestVersion.empty() || latestVersion == CROSSPOINT_VERSION) {
+  if (!updateAvailable || latestVersion.empty() || latestVersion == PAPYRIX_VERSION) {
     return false;
   }
 
@@ -83,8 +83,8 @@ bool OtaUpdater::isUpdateNewer() {
     return false;
   }
 
-  if (sscanf(CROSSPOINT_VERSION, "%d.%d.%d", &currentMajor, &currentMinor, &currentPatch) != 3) {
-    Serial.printf("[%lu] [OTA] Failed to parse current version: %s\n", millis(), CROSSPOINT_VERSION);
+  if (sscanf(PAPYRIX_VERSION, "%d.%d.%d", &currentMajor, &currentMinor, &currentPatch) != 3) {
+    Serial.printf("[%lu] [OTA] Failed to parse current version: %s\n", millis(), PAPYRIX_VERSION);
     return false;
   }
 
@@ -112,7 +112,7 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(const std::function<void(s
 
   http.begin(*client, otaUrl.c_str());
   http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-  http.addHeader("User-Agent", "CrossPoint-ESP32-" CROSSPOINT_VERSION);
+  http.addHeader("User-Agent", "Papyrix-ESP32-" PAPYRIX_VERSION);
   const int httpCode = http.GET();
 
   if (httpCode != HTTP_CODE_OK) {

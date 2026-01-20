@@ -149,7 +149,7 @@ void OtaUpdateActivity::render() {
 
   if (state == WAITING_CONFIRMATION) {
     renderer.drawCenteredText(THEME.uiFontId, 200, "New update available!", THEME.primaryTextBlack, BOLD);
-    renderer.drawText(THEME.uiFontId, 20, 250, "Current Version: " CROSSPOINT_VERSION, THEME.primaryTextBlack);
+    renderer.drawText(THEME.uiFontId, 20, 250, "Current Version: " PAPYRIX_VERSION, THEME.primaryTextBlack);
     renderer.drawText(THEME.uiFontId, 20, 270, ("New Version: " + updater.getLatestVersion()).c_str(),
                       THEME.primaryTextBlack);
 

@@ -20,7 +20,7 @@ bool HttpDownloader::fetchUrl(const std::string& url, std::string& outContent, c
 
   http.begin(*client, url.c_str());
   http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-  http.addHeader("User-Agent", "Papyrix-ESP32-" CROSSPOINT_VERSION);
+  http.addHeader("User-Agent", "Papyrix-ESP32-" PAPYRIX_VERSION);
 
   // Add Basic Auth if credentials provided
   if (!username.empty()) {
@@ -54,7 +54,7 @@ bool HttpDownloader::fetchUrlStreaming(const std::string& url, ChunkCallback onC
 
   http.begin(*client, url.c_str());
   http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-  http.addHeader("User-Agent", "Papyrix-ESP32-" CROSSPOINT_VERSION);
+  http.addHeader("User-Agent", "Papyrix-ESP32-" PAPYRIX_VERSION);
 
   if (!username.empty()) {
     const std::string credentials = username + ":" + password;
@@ -131,7 +131,7 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string& 
 
   http.begin(*client, url.c_str());
   http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-  http.addHeader("User-Agent", "Papyrix-ESP32-" CROSSPOINT_VERSION);
+  http.addHeader("User-Agent", "Papyrix-ESP32-" PAPYRIX_VERSION);
 
   // Add Basic Auth if credentials provided
   if (!username.empty()) {

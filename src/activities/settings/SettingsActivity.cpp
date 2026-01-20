@@ -277,8 +277,8 @@ void SettingsActivity::render() const {
   }
 
   // Draw version text above button hints
-  renderer.drawText(THEME.smallFontId, pageWidth - 20 - renderer.getTextWidth(THEME.smallFontId, CROSSPOINT_VERSION),
-                    pageHeight - 60, CROSSPOINT_VERSION, THEME.primaryTextBlack);
+  renderer.drawText(THEME.smallFontId, pageWidth - 20 - renderer.getTextWidth(THEME.smallFontId, PAPYRIX_VERSION),
+                    pageHeight - 60, PAPYRIX_VERSION, THEME.primaryTextBlack);
 
   // Draw help text
   const auto labels = mappedInput.mapLabels("Save", "Toggle", "", "");

@@ -60,6 +60,8 @@ MappedInputManager mappedInputManager(inputManager);
 GfxRenderer renderer(einkDisplay);
 Activity* currentActivity;
 
+RTC_DATA_ATTR uint16_t rtcPowerButtonDurationMs = 400;
+
 // Fonts - Small (14pt, default)
 EpdFont readerFont(&reader_2b);
 EpdFont readerBoldFont(&reader_bold_2b);
@@ -87,10 +89,6 @@ EpdFont ui12Font(&ui_12);
 EpdFont uiBold12Font(&ui_bold_12);
 EpdFontFamily uiFontFamily(&ui12Font, &uiBold12Font);
 
-// measurement of power button press duration calibration value
-unsigned long t1 = 0;
-unsigned long t2 = 0;
-
 void exitActivity() {
   if (currentActivity) {
     currentActivity->onExit();
@@ -117,13 +115,10 @@ void verifyWakeupLongPress() {
     return;
   }
 
-  // Give the user up to 1000ms to start holding the power button, and must hold for SETTINGS.getPowerButtonDuration()
+  // Give the user up to 1000ms to start holding the power button, and must hold for the configured duration
   const auto start = millis();
   bool abort = false;
-  // It takes us some time to wake up from deep sleep, so we need to subtract that from the duration
-  uint16_t calibration = 29;
-  uint16_t calibratedPressDuration =
-      (calibration < SETTINGS.getPowerButtonDuration()) ? SETTINGS.getPowerButtonDuration() - calibration : 1;
+  const uint16_t requiredPressDuration = rtcPowerButtonDurationMs;
 
   inputManager.update();
   // Verify the user has actually pressed
@@ -132,13 +127,12 @@ void verifyWakeupLongPress() {
     inputManager.update();
   }
 
-  t2 = millis();
   if (inputManager.isPressed(InputManager::BTN_POWER)) {
     do {
       delay(10);
       inputManager.update();
-    } while (inputManager.isPressed(InputManager::BTN_POWER) && inputManager.getHeldTime() < calibratedPressDuration);
-    abort = inputManager.getHeldTime() < calibratedPressDuration;
+    } while (inputManager.isPressed(InputManager::BTN_POWER) && inputManager.getHeldTime() < requiredPressDuration);
+    abort = inputManager.getHeldTime() < requiredPressDuration;
   } else {
     abort = true;
   }
@@ -164,8 +158,9 @@ void enterDeepSleep() {
   exitActivity();
   enterNewActivity(new SleepActivity(renderer, mappedInputManager));
 
+  rtcPowerButtonDurationMs = SETTINGS.getPowerButtonDuration();
+
   einkDisplay.deepSleep();
-  Serial.printf("[%lu] [   ] Power button press calibration value: %lu ms\n", millis(), t2 - t1);
   Serial.printf("[%lu] [   ] Entering deep sleep.\n", millis());
   esp_deep_sleep_enable_gpio_wakeup(1ULL << InputManager::POWER_BUTTON_PIN, ESP_GPIO_WAKEUP_GPIO_LOW);
   // Ensure that the power button has been released to avoid immediately turning back on if you're holding it
@@ -302,8 +297,6 @@ void applyThemeFonts() {
 }
 
 void setup() {
-  t1 = millis();
-
   // Only start serial if USB connected
   pinMode(UART0_RXD, INPUT);
   if (digitalRead(UART0_RXD) == HIGH) {
@@ -311,6 +304,10 @@ void setup() {
   }
 
   inputManager.begin();
+  verifyWakeupLongPress();
+
+  Serial.printf("[%lu] [   ] Starting CrossPoint version " PAPYRIX_VERSION "\n", millis());
+
   // Initialize battery ADC pin with proper attenuation for 0-3.3V range
   analogSetPinAttenuation(BAT_GPIO0, ADC_11db);
 
@@ -328,6 +325,7 @@ void setup() {
   }
 
   SETTINGS.loadFromFile();
+  rtcPowerButtonDurationMs = SETTINGS.getPowerButtonDuration();
 
   // Initialize internal flash filesystem for font storage
   if (!LittleFS.begin(true)) {
@@ -341,12 +339,6 @@ void setup() {
   THEME_MANAGER.loadTheme(SETTINGS.themeName);
   THEME_MANAGER.createDefaultThemeFiles();  // Create template files if missing
   Serial.printf("[%lu] [   ] Theme loaded: %s\n", millis(), THEME_MANAGER.currentThemeName());
-
-  // verify power button press duration after we've read settings.
-  verifyWakeupLongPress();
-
-  // First serial output only here to avoid timing inconsistencies for power button press duration verification
-  Serial.printf("[%lu] [   ] Starting CrossPoint version " CROSSPOINT_VERSION "\n", millis());
 
   setupDisplayAndFonts();
   applyThemeFonts();

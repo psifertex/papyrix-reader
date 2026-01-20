@@ -57,7 +57,7 @@ void SystemInfoActivity::render() const {
 
   // Firmware version
   renderer.drawText(THEME.uiFontId, labelX, currentY, "Version:", THEME.primaryTextBlack);
-  renderer.drawText(THEME.uiFontId, valueX, currentY, CROSSPOINT_VERSION, THEME.primaryTextBlack);
+  renderer.drawText(THEME.uiFontId, valueX, currentY, PAPYRIX_VERSION, THEME.primaryTextBlack);
   currentY += lineHeight;
 
   // Uptime
