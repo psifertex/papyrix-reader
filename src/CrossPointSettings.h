@@ -76,6 +76,8 @@ class CrossPointSettings {
   uint8_t hyphenation = 1;
   // Text anti-aliasing (grayscale text rendering)
   uint8_t textAntiAliasing = 1;
+  // Show inline images and covers (OFF for faster rendering)
+  uint8_t showImages = 1;
   // Theme name (loaded from /themes/<name>.theme)
   char themeName[32] = "light";
 

@@ -9,9 +9,9 @@
 #include "parsers/ChapterHtmlSlimParser.h"
 
 namespace {
-constexpr uint8_t SECTION_FILE_VERSION = 11;  // v11: Added inline image support
+constexpr uint8_t SECTION_FILE_VERSION = 12;  // v12: Added showImages setting
 constexpr uint32_t HEADER_SIZE = sizeof(uint8_t) + sizeof(int) + sizeof(float) + sizeof(bool) + sizeof(uint8_t) +
-                                 sizeof(bool) + sizeof(uint16_t) + sizeof(uint16_t) + sizeof(uint16_t) +
+                                 sizeof(bool) + sizeof(bool) + sizeof(uint16_t) + sizeof(uint16_t) + sizeof(uint16_t) +
                                  sizeof(uint32_t);
 }  // namespace
 
@@ -33,7 +33,7 @@ uint32_t Section::onPageComplete(std::unique_ptr<Page> page) {
 }
 
 void Section::writeSectionFileHeader(const int fontId, const float lineCompression, const bool extraParagraphSpacing,
-                                     const uint8_t paragraphAlignment, const bool hyphenation,
+                                     const uint8_t paragraphAlignment, const bool hyphenation, const bool showImages,
                                      const uint16_t viewportWidth, const uint16_t viewportHeight) {
   if (!file) {
     Serial.printf("[%lu] [SCT] File not open for writing header\n", millis());
@@ -41,8 +41,8 @@ void Section::writeSectionFileHeader(const int fontId, const float lineCompressi
   }
   static_assert(HEADER_SIZE == sizeof(SECTION_FILE_VERSION) + sizeof(fontId) + sizeof(lineCompression) +
                                    sizeof(extraParagraphSpacing) + sizeof(paragraphAlignment) + sizeof(hyphenation) +
-                                   sizeof(viewportWidth) + sizeof(viewportHeight) + sizeof(pageCount) +
-                                   sizeof(uint32_t),
+                                   sizeof(showImages) + sizeof(viewportWidth) + sizeof(viewportHeight) +
+                                   sizeof(pageCount) + sizeof(uint32_t),
                 "Header size mismatch");
   serialization::writePod(file, SECTION_FILE_VERSION);
   serialization::writePod(file, fontId);
@@ -50,6 +50,7 @@ void Section::writeSectionFileHeader(const int fontId, const float lineCompressi
   serialization::writePod(file, extraParagraphSpacing);
   serialization::writePod(file, paragraphAlignment);
   serialization::writePod(file, hyphenation);
+  serialization::writePod(file, showImages);
   serialization::writePod(file, viewportWidth);
   serialization::writePod(file, viewportHeight);
   serialization::writePod(file, pageCount);  // Placeholder for page count (will be initially 0 when written)
@@ -57,8 +58,8 @@ void Section::writeSectionFileHeader(const int fontId, const float lineCompressi
 }
 
 bool Section::loadSectionFile(const int fontId, const float lineCompression, const bool extraParagraphSpacing,
-                              const uint8_t paragraphAlignment, const bool hyphenation, const uint16_t viewportWidth,
-                              const uint16_t viewportHeight) {
+                              const uint8_t paragraphAlignment, const bool hyphenation, const bool showImages,
+                              const uint16_t viewportWidth, const uint16_t viewportHeight) {
   if (!SdMan.openFileForRead("SCT", filePath, file)) {
     return false;
   }
@@ -80,17 +81,20 @@ bool Section::loadSectionFile(const int fontId, const float lineCompression, con
     bool fileExtraParagraphSpacing;
     uint8_t fileParagraphAlignment;
     bool fileHyphenation;
+    bool fileShowImages;
     serialization::readPod(file, fileFontId);
     serialization::readPod(file, fileLineCompression);
     serialization::readPod(file, fileExtraParagraphSpacing);
     serialization::readPod(file, fileParagraphAlignment);
     serialization::readPod(file, fileHyphenation);
+    serialization::readPod(file, fileShowImages);
     serialization::readPod(file, fileViewportWidth);
     serialization::readPod(file, fileViewportHeight);
 
     if (fontId != fileFontId || lineCompression != fileLineCompression ||
         extraParagraphSpacing != fileExtraParagraphSpacing || paragraphAlignment != fileParagraphAlignment ||
-        hyphenation != fileHyphenation || viewportWidth != fileViewportWidth || viewportHeight != fileViewportHeight) {
+        hyphenation != fileHyphenation || showImages != fileShowImages || viewportWidth != fileViewportWidth ||
+        viewportHeight != fileViewportHeight) {
       file.close();
       Serial.printf("[%lu] [SCT] Deserialization failed: Parameters do not match\n", millis());
       clearCache();
@@ -122,7 +126,8 @@ bool Section::clearCache() const {
 
 bool Section::createSectionFile(const int fontId, const float lineCompression, const bool extraParagraphSpacing,
                                 const uint8_t paragraphAlignment, const bool hyphenation, const uint16_t viewportWidth,
-                                const uint16_t viewportHeight, const std::function<void()>& progressSetupFn,
+                                const uint16_t viewportHeight, const bool showImages,
+                                const std::function<void()>& progressSetupFn,
                                 const std::function<void(int)>& progressFn) {
   constexpr uint32_t MIN_SIZE_FOR_PROGRESS = 50 * 1024;  // 50KB
   const auto localPath = epub->getSpineItem(spineIndex).href;
@@ -144,7 +149,7 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
       chapterBasePath = localPath.substr(0, lastSlash + 1);
     }
   }
-  const std::string imageCachePath = epub->getCachePath() + "/images";
+  const std::string imageCachePath = showImages ? (epub->getCachePath() + "/images") : "";
 
   // Retry logic for SD card timing issues
   bool success = false;
@@ -202,8 +207,8 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
     SdMan.remove(normalizedPath.c_str());
     return false;
   }
-  writeSectionFileHeader(fontId, lineCompression, extraParagraphSpacing, paragraphAlignment, hyphenation, viewportWidth,
-                         viewportHeight);
+  writeSectionFileHeader(fontId, lineCompression, extraParagraphSpacing, paragraphAlignment, hyphenation, showImages,
+                         viewportWidth, viewportHeight);
   std::vector<uint32_t> lut = {};
 
   // Create readItemFn callback for extracting images from EPUB

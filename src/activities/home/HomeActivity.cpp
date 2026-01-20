@@ -52,7 +52,7 @@ void HomeActivity::onEnter() {
           lastBookAuthor = std::string(epub.getAuthor());
         }
         // Try to generate thumbnail image for Continue Reading card
-        if (epub.generateThumbBmp()) {
+        if (SETTINGS.showImages && epub.generateThumbBmp()) {
           coverBmpPath = epub.getThumbBmpPath();
           hasCoverImage = true;
         }

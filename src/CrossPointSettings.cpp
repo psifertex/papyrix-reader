@@ -13,7 +13,7 @@ namespace {
 // Version 3: Removed showBookDetails (now always enabled)
 constexpr uint8_t SETTINGS_FILE_VERSION = 3;
 // Increment this when adding new persisted settings fields
-constexpr uint8_t SETTINGS_COUNT = 13;
+constexpr uint8_t SETTINGS_COUNT = 14;
 }  // namespace
 
 bool CrossPointSettings::saveToFile() const {
@@ -39,6 +39,7 @@ bool CrossPointSettings::saveToFile() const {
   serialization::writePod(outputFile, paragraphAlignment);
   serialization::writePod(outputFile, hyphenation);
   serialization::writePod(outputFile, textAntiAliasing);
+  serialization::writePod(outputFile, showImages);
   // Write themeName as fixed-length string
   outputFile.write(reinterpret_cast<const uint8_t*>(themeName), sizeof(themeName));
   outputFile.close();
@@ -90,6 +91,8 @@ bool CrossPointSettings::loadFromFile() {
     serialization::readPod(inputFile, hyphenation);
     if (++settingsRead >= fileSettingsCount) break;
     serialization::readPod(inputFile, textAntiAliasing);
+    if (++settingsRead >= fileSettingsCount) break;
+    serialization::readPod(inputFile, showImages);
     if (++settingsRead >= fileSettingsCount) break;
     // Read themeName as fixed-length string
     inputFile.read(reinterpret_cast<uint8_t*>(themeName), sizeof(themeName));

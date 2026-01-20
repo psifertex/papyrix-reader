@@ -279,7 +279,8 @@ void EpubReaderActivity::renderScreen() {
     const auto viewportHeight = renderer.getScreenHeight() - orientedMarginTop - orientedMarginBottom;
 
     if (!section->loadSectionFile(SETTINGS.getReaderFontId(), lineCompression, SETTINGS.extraParagraphSpacing,
-                                  SETTINGS.paragraphAlignment, SETTINGS.hyphenation, viewportWidth, viewportHeight)) {
+                                  SETTINGS.paragraphAlignment, SETTINGS.hyphenation, SETTINGS.showImages, viewportWidth,
+                                  viewportHeight)) {
       Serial.printf("[%lu] [ERS] Cache not found, building...\n", millis());
 
       // Show static "Indexing..." message
@@ -298,7 +299,7 @@ void EpubReaderActivity::renderScreen() {
 
       if (!section->createSectionFile(SETTINGS.getReaderFontId(), lineCompression, SETTINGS.extraParagraphSpacing,
                                       SETTINGS.paragraphAlignment, SETTINGS.hyphenation, viewportWidth, viewportHeight,
-                                      nullptr, nullptr)) {
+                                      SETTINGS.showImages, nullptr, nullptr)) {
         Serial.printf("[%lu] [ERS] Failed to persist page data to SD\n", millis());
         section.reset();
         // Show error message to user
@@ -327,7 +328,7 @@ void EpubReaderActivity::renderScreen() {
 
     // Render cover image if this is spine[0] and cover exists
     if (currentSpineIndex == 0) {
-      if (epub->generateCoverBmp()) {
+      if (SETTINGS.showImages && epub->generateCoverBmp()) {
         Serial.printf("[%lu] [ERS] Rendering cover page from BMP\n", millis());
         renderCoverPage(orientedMarginTop, orientedMarginRight, orientedMarginBottom, orientedMarginLeft);
       } else {
@@ -362,7 +363,7 @@ void EpubReaderActivity::renderScreen() {
 
     // Check if this is an empty cover page (spine[0], page 0, no elements)
     if (currentSpineIndex == 0 && section->currentPage == 0 && p->elements.empty()) {
-      if (epub->generateCoverBmp()) {
+      if (SETTINGS.showImages && epub->generateCoverBmp()) {
         Serial.printf("[%lu] [ERS] Empty cover page detected, rendering cover BMP\n", millis());
         renderCoverPage(orientedMarginTop, orientedMarginRight, orientedMarginBottom, orientedMarginLeft);
       } else {

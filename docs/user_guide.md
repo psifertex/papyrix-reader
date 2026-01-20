@@ -130,6 +130,10 @@ The Settings screen allows you to configure the device's behavior:
   - Enable grayscale text rendering for smoother font edges
   - Disable for faster page turns and to eliminate the brief "thick text" flash during transitions
 
+- **Show Images** (default: ON)
+  - Display inline images within EPUB content and book covers
+  - Disable for faster page rendering (images show "[Image]" placeholder)
+
 - **Pages Per Refresh** (default: 15)
   - Options: 1, 5, 10, 15, 30
   - Number of pages to turn before performing a full e-paper refresh (clears ghosting)

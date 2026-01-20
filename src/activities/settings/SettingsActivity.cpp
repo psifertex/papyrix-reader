@@ -22,7 +22,7 @@ constexpr const char* autoSleepValues[] = {"5 min", "10 min", "15 min", "30 min"
 constexpr const char* paragraphAlignmentValues[] = {"Justified", "Left", "Center", "Right"};
 constexpr const char* shortPwrBtnValues[] = {"Ignore", "Sleep", "Page Turn"};
 
-constexpr int settingsCount = 17;
+constexpr int settingsCount = 18;
 const SettingInfo settingsList[settingsCount] = {
     // Theme
     {"Theme", SettingType::THEME_SELECT, nullptr, nullptr, 0},
@@ -32,6 +32,7 @@ const SettingInfo settingsList[settingsCount] = {
     {"Extra Paragraph Spacing", SettingType::TOGGLE, &CrossPointSettings::extraParagraphSpacing, nullptr, 0},
     {"Hyphenation", SettingType::TOGGLE, &CrossPointSettings::hyphenation, nullptr, 0},
     {"Text Anti-Aliasing", SettingType::TOGGLE, &CrossPointSettings::textAntiAliasing, nullptr, 0},
+    {"Show Images", SettingType::TOGGLE, &CrossPointSettings::showImages, nullptr, 0},
     {"Reading Orientation", SettingType::ENUM, &CrossPointSettings::orientation, orientationValues, 4},
     {"Status Bar", SettingType::ENUM, &CrossPointSettings::statusBar, statusBarValues, 3},
     // Device Settings
