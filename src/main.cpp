@@ -110,16 +110,12 @@ void enterNewActivity(Activity* activity) {
   currentActivity->onEnter();
 }
 
-bool isUsbConnected() {
-  return digitalRead(UART0_RXD) == HIGH;
-}
+bool isUsbConnected() { return digitalRead(UART0_RXD) == HIGH; }
 
 bool isWakeupAfterFlashing() {
   const auto wakeupCause = esp_sleep_get_wakeup_cause();
   const auto resetReason = esp_reset_reason();
-  return isUsbConnected() &&
-         (wakeupCause == ESP_SLEEP_WAKEUP_UNDEFINED) &&
-         (resetReason == ESP_RST_UNKNOWN);
+  return isUsbConnected() && (wakeupCause == ESP_SLEEP_WAKEUP_UNDEFINED) && (resetReason == ESP_RST_UNKNOWN);
 }
 
 // Verify long press on wake-up from deep sleep

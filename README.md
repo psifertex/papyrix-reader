@@ -267,6 +267,8 @@ Papyrix includes several performance optimizations for the constrained ESP32-C3 
 
 **XTC rendering**: 1-bit monochrome pages use byte-level processing instead of pixel-by-pixel iteration. All-white bytes (common in margins) are skipped entirely, and all-black bytes are processed in bulk.
 
+**Group5 compression**: 1-bit image data uses CCITT Group5 compression for fast decompression and reduced SD card I/O. Ordered dithering converts grayscale images to 1-bit with minimal visual artifacts.
+
 ### Data caching
 
 The first time chapters of a book are loaded, they are cached to the SD card. Subsequent loads are served from the cache. This cache directory exists at `.papyrix` on the SD card. The structure is as follows:

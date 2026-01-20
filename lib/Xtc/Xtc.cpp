@@ -203,7 +203,7 @@ bool Xtc::generateCoverBmp() const {
   coverBmp.write(reinterpret_cast<const uint8_t*>(&colorsImportant), 4);
 
   // Color palette (2 colors for 1-bit)
-  // XTC uses inverted polarity: 0 = black, 1 = white
+  // XTC 1-bit polarity: 0 = black, 1 = white (standard BMP palette order)
   // Color 0: Black (text/foreground in XTC)
   uint8_t black[4] = {0x00, 0x00, 0x00, 0x00};
   coverBmp.write(black, 4);
