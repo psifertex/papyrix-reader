@@ -9,6 +9,7 @@
 #include <builtinFonts/reader_2b.h>
 #include <builtinFonts/reader_bold_2b.h>
 #include <builtinFonts/reader_italic_2b.h>
+#include <driver/gpio.h>
 #include <esp_system.h>
 // Medium font (16pt)
 #include <builtinFonts/reader_medium_2b.h>
@@ -141,6 +142,9 @@ void verifyWakeupLongPress() {
     // Button released too early. Returning to sleep.
     // IMPORTANT: Re-arm the wakeup trigger before sleeping again
     esp_deep_sleep_enable_gpio_wakeup(1ULL << InputManager::POWER_BUTTON_PIN, ESP_GPIO_WAKEUP_GPIO_LOW);
+    // Hold all GPIO pins at their current state during deep sleep to keep the X4's LDO enabled.
+    // Without this, floating pins can cause increased power draw during sleep.
+    gpio_deep_sleep_hold_en();
     esp_deep_sleep_start();
   }
 }
@@ -165,7 +169,9 @@ void enterDeepSleep() {
   esp_deep_sleep_enable_gpio_wakeup(1ULL << InputManager::POWER_BUTTON_PIN, ESP_GPIO_WAKEUP_GPIO_LOW);
   // Ensure that the power button has been released to avoid immediately turning back on if you're holding it
   waitForPowerRelease();
-  // Enter Deep Sleep
+  // Hold all GPIO pins at their current state during deep sleep to keep the X4's LDO enabled.
+  // Without this, floating pins can cause increased power draw during sleep.
+  gpio_deep_sleep_hold_en();
   esp_deep_sleep_start();
 }
 

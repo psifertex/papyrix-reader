@@ -352,4 +352,6 @@ Contributions are very welcome!
 
 Papyrix is a fork of [CrossPoint Reader](https://github.com/daveallie/crosspoint-reader) by Dave Allie.
 
+X4 hardware insights from [bb_epaper](https://github.com/bitbank2/bb_epaper) by Larry Bank.
+
 **Not affiliated with Xteink or any manufacturer of the X4 hardware**.
