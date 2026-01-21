@@ -20,6 +20,7 @@ constexpr const char* pagesPerRefreshValues[] = {"1", "5", "10", "15", "30"};
 constexpr const char* orientationValues[] = {"Portrait", "Landscape CW", "Inverted", "Landscape CCW"};
 constexpr const char* autoSleepValues[] = {"5 min", "10 min", "15 min", "30 min", "Never"};
 constexpr const char* paragraphAlignmentValues[] = {"Justified", "Left", "Center", "Right"};
+constexpr const char* textLayoutValues[] = {"Compact", "Standard", "Large"};
 constexpr const char* shortPwrBtnValues[] = {"Ignore", "Sleep", "Page Turn"};
 
 constexpr int settingsCount = 18;
@@ -29,7 +30,7 @@ const SettingInfo settingsList[settingsCount] = {
     // Book Settings
     {"Font Size", SettingType::ENUM, &CrossPointSettings::fontSize, fontSizeValues, 3},
     {"Paragraph Alignment", SettingType::ENUM, &CrossPointSettings::paragraphAlignment, paragraphAlignmentValues, 4},
-    {"Extra Paragraph Spacing", SettingType::TOGGLE, &CrossPointSettings::extraParagraphSpacing, nullptr, 0},
+    {"Text Layout", SettingType::ENUM, &CrossPointSettings::textLayout, textLayoutValues, 3},
     {"Hyphenation", SettingType::TOGGLE, &CrossPointSettings::hyphenation, nullptr, 0},
     {"Text Anti-Aliasing", SettingType::TOGGLE, &CrossPointSettings::textAntiAliasing, nullptr, 0},
     {"Show Images", SettingType::TOGGLE, &CrossPointSettings::showImages, nullptr, 0},

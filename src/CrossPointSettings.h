@@ -47,6 +47,9 @@ class CrossPointSettings {
   // Paragraph alignment options (values match TextBlock::BLOCK_STYLE)
   enum PARAGRAPH_ALIGNMENT { ALIGN_JUSTIFIED = 0, ALIGN_LEFT = 1, ALIGN_CENTER = 2, ALIGN_RIGHT = 3 };
 
+  // Text layout presets (controls indentation and paragraph spacing)
+  enum TEXT_LAYOUT { LAYOUT_COMPACT = 0, LAYOUT_STANDARD = 1, LAYOUT_LARGE = 2 };
+
   // Short power button press actions
   enum SHORT_PWRBTN { PWRBTN_IGNORE = 0, PWRBTN_SLEEP = 1, PWRBTN_PAGE_TURN = 2 };
 
@@ -54,8 +57,8 @@ class CrossPointSettings {
   uint8_t sleepScreen = DARK;
   // Status bar settings
   uint8_t statusBar = FULL;
-  // Text rendering settings
-  uint8_t extraParagraphSpacing = 1;
+  // Text layout preset (controls indentation and paragraph spacing)
+  uint8_t textLayout = LAYOUT_STANDARD;
   // Short power button click behaviour
   uint8_t shortPwrBtn = PWRBTN_IGNORE;
   // EPUB reading orientation settings
@@ -117,6 +120,32 @@ class CrossPointSettings {
   int getPagesPerRefreshValue() const {
     constexpr int values[] = {1, 5, 10, 15, 30};
     return values[pagesPerRefresh];
+  }
+
+  uint8_t getIndentLevel() const {
+    switch (textLayout) {
+      case LAYOUT_COMPACT:
+        return 0;  // None
+      case LAYOUT_STANDARD:
+        return 2;  // Normal (em-space)
+      case LAYOUT_LARGE:
+        return 3;  // Large (1.5 em)
+      default:
+        return 2;
+    }
+  }
+
+  uint8_t getSpacingLevel() const {
+    switch (textLayout) {
+      case LAYOUT_COMPACT:
+        return 0;  // None
+      case LAYOUT_STANDARD:
+        return 1;  // Small (1/4 line)
+      case LAYOUT_LARGE:
+        return 3;  // Large (full line)
+      default:
+        return 1;
+    }
   }
 
   bool saveToFile() const;

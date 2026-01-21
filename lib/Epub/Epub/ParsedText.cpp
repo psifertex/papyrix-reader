@@ -186,10 +186,20 @@ std::vector<uint16_t> ParsedText::calculateWordWidths(const GfxRenderer& rendere
   std::vector<uint16_t> wordWidths;
   wordWidths.reserve(totalWordCount);
 
-  // add em-space at the beginning of first word in paragraph to indent
-  if (!extraParagraphSpacing) {
+  // Add indentation at the beginning of first word in paragraph
+  if (indentLevel > 0 && !words.empty()) {
     std::string& first_word = words.front();
-    first_word.insert(0, "\xe2\x80\x83");
+    switch (indentLevel) {
+      case 2:  // Normal - em-space (U+2003)
+        first_word.insert(0, "\xe2\x80\x83");
+        break;
+      case 3:  // Large - em-space + en-space (U+2003 + U+2002)
+        first_word.insert(0, "\xe2\x80\x83\xe2\x80\x82");
+        break;
+      default:  // Fallback for unexpected values: single en-space (U+2002)
+        first_word.insert(0, "\xe2\x80\x82");
+        break;
+    }
   }
 
   auto wordsIt = words.begin();

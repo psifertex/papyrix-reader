@@ -278,9 +278,9 @@ void EpubReaderActivity::renderScreen() {
     const auto viewportWidth = renderer.getScreenWidth() - orientedMarginLeft - orientedMarginRight;
     const auto viewportHeight = renderer.getScreenHeight() - orientedMarginTop - orientedMarginBottom;
 
-    if (!section->loadSectionFile(SETTINGS.getReaderFontId(), lineCompression, SETTINGS.extraParagraphSpacing,
-                                  SETTINGS.paragraphAlignment, SETTINGS.hyphenation, SETTINGS.showImages, viewportWidth,
-                                  viewportHeight)) {
+    if (!section->loadSectionFile(SETTINGS.getReaderFontId(), lineCompression, SETTINGS.getIndentLevel(),
+                                  SETTINGS.getSpacingLevel(), SETTINGS.paragraphAlignment, SETTINGS.hyphenation,
+                                  SETTINGS.showImages, viewportWidth, viewportHeight)) {
       Serial.printf("[%lu] [ERS] Cache not found, building...\n", millis());
 
       // Show static "Indexing..." message
@@ -297,9 +297,9 @@ void EpubReaderActivity::renderScreen() {
       renderer.drawRect(boxX + 5, boxY + 5, boxWidth - 10, boxHeight - 10, THEME.primaryTextBlack);
       renderer.displayBuffer();
 
-      if (!section->createSectionFile(SETTINGS.getReaderFontId(), lineCompression, SETTINGS.extraParagraphSpacing,
-                                      SETTINGS.paragraphAlignment, SETTINGS.hyphenation, viewportWidth, viewportHeight,
-                                      SETTINGS.showImages, nullptr, nullptr)) {
+      if (!section->createSectionFile(SETTINGS.getReaderFontId(), lineCompression, SETTINGS.getIndentLevel(),
+                                      SETTINGS.getSpacingLevel(), SETTINGS.paragraphAlignment, SETTINGS.hyphenation,
+                                      viewportWidth, viewportHeight, SETTINGS.showImages, nullptr, nullptr)) {
         Serial.printf("[%lu] [ERS] Failed to persist page data to SD\n", millis());
         section.reset();
         // Show error message to user

@@ -16,7 +16,7 @@ class ParsedText {
   std::list<std::string> words;
   std::list<EpdFontFamily::Style> wordStyles;
   TextBlock::BLOCK_STYLE style;
-  bool extraParagraphSpacing;
+  uint8_t indentLevel;
   bool hyphenationEnabled;
 
   std::vector<size_t> computeLineBreaks(int pageWidth, int spaceWidth, const std::vector<uint16_t>& wordWidths) const;
@@ -27,9 +27,9 @@ class ParsedText {
   void preSplitOversizedWords(const GfxRenderer& renderer, int fontId, int pageWidth);
 
  public:
-  explicit ParsedText(const TextBlock::BLOCK_STYLE style, const bool extraParagraphSpacing,
+  explicit ParsedText(const TextBlock::BLOCK_STYLE style, const uint8_t indentLevel,
                       const bool hyphenationEnabled = true)
-      : style(style), extraParagraphSpacing(extraParagraphSpacing), hyphenationEnabled(hyphenationEnabled) {}
+      : style(style), indentLevel(indentLevel), hyphenationEnabled(hyphenationEnabled) {}
   ~ParsedText() = default;
 
   void addWord(std::string word, EpdFontFamily::Style fontStyle);

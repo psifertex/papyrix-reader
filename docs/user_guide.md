@@ -110,9 +110,6 @@ The Settings screen allows you to configure the device's behavior:
   - Options: None, No Progress, Full
   - Status bar display during reading
 
-- **Extra Paragraph Spacing** (default: ON)
-  - Add vertical space between paragraphs (OFF uses first-line indentation instead)
-
 - **Font Size** (default: Normal)
   - Options: Small (14pt), Normal (16pt), Large (18pt)
   - Text size for reading
@@ -120,6 +117,13 @@ The Settings screen allows you to configure the device's behavior:
 - **Paragraph Alignment** (default: Justified)
   - Options: Justified, Left, Center, Right
   - Text alignment for paragraphs (headers remain centered)
+
+- **Text Layout** (default: Standard)
+  - Options: Compact, Standard, Large
+  - Controls first-line indentation and paragraph spacing:
+    - **Compact:** No indent, no extra spacing (dense text)
+    - **Standard:** Normal indent (em-space), small spacing between paragraphs
+    - **Large:** Large indent, full line spacing between paragraphs
 
 - **Hyphenation** (default: ON)
   - Break long words at soft hyphen positions embedded in EPUB content

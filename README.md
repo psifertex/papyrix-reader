@@ -42,6 +42,7 @@ This project is **not affiliated with Xteink**; it's built as a community projec
 ### Text & Display
 - [x] Configurable font sizes (Small/Medium/Large)
 - [x] Paragraph alignment (Justified/Left/Center/Right)
+- [x] Text layout presets (Compact/Standard/Large) for indentation and spacing
 - [x] Soft hyphen support for text layout
 - [x] CJK (Chinese/Japanese/Korean) text layout
 - [x] Text anti-aliasing toggle (grayscale text rendering)

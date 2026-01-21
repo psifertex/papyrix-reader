@@ -35,7 +35,8 @@ class ChapterHtmlSlimParser {
   int16_t currentPageNextY = 0;
   int fontId;
   float lineCompression;
-  bool extraParagraphSpacing;
+  uint8_t indentLevel;
+  uint8_t spacingLevel;
   uint8_t paragraphAlignment;
   bool hyphenation;
   uint16_t viewportWidth;
@@ -57,7 +58,7 @@ class ChapterHtmlSlimParser {
 
  public:
   explicit ChapterHtmlSlimParser(const std::string& filepath, GfxRenderer& renderer, const int fontId,
-                                 const float lineCompression, const bool extraParagraphSpacing,
+                                 const float lineCompression, const uint8_t indentLevel, const uint8_t spacingLevel,
                                  const uint8_t paragraphAlignment, const bool hyphenation, const uint16_t viewportWidth,
                                  const uint16_t viewportHeight,
                                  const std::function<void(std::unique_ptr<Page>)>& completePageFn,
@@ -68,7 +69,8 @@ class ChapterHtmlSlimParser {
         renderer(renderer),
         fontId(fontId),
         lineCompression(lineCompression),
-        extraParagraphSpacing(extraParagraphSpacing),
+        indentLevel(indentLevel),
+        spacingLevel(spacingLevel),
         paragraphAlignment(paragraphAlignment),
         hyphenation(hyphenation),
         viewportWidth(viewportWidth),

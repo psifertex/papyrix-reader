@@ -55,7 +55,7 @@ void ChapterHtmlSlimParser::startNewTextBlock(const TextBlock::BLOCK_STYLE style
 
     makePages();
   }
-  currentTextBlock.reset(new ParsedText(style, extraParagraphSpacing, hyphenation));
+  currentTextBlock.reset(new ParsedText(style, indentLevel, hyphenation));
 }
 
 void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char* name, const XML_Char** atts) {
@@ -418,9 +418,14 @@ void ChapterHtmlSlimParser::makePages() {
   currentTextBlock->layoutAndExtractLines(
       renderer, fontId, viewportWidth,
       [this](const std::shared_ptr<TextBlock>& textBlock) { addLineToPage(textBlock); });
-  // Extra paragraph spacing if enabled
-  if (extraParagraphSpacing) {
-    currentPageNextY += lineHeight / 2;
+  // Extra paragraph spacing based on spacingLevel (0=none, 1=small, 3=large)
+  switch (spacingLevel) {
+    case 1:
+      currentPageNextY += lineHeight / 4;  // Small (1/4 line)
+      break;
+    case 3:
+      currentPageNextY += lineHeight;  // Large (full line)
+      break;
   }
 }
 
