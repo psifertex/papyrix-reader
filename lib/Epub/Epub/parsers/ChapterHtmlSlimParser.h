@@ -8,6 +8,7 @@
 #include <string>
 
 #include "../ParsedText.h"
+#include "../RenderConfig.h"
 #include "../blocks/ImageBlock.h"
 #include "../blocks/TextBlock.h"
 
@@ -33,14 +34,7 @@ class ChapterHtmlSlimParser {
   std::unique_ptr<ParsedText> currentTextBlock = nullptr;
   std::unique_ptr<Page> currentPage = nullptr;
   int16_t currentPageNextY = 0;
-  int fontId;
-  float lineCompression;
-  uint8_t indentLevel;
-  uint8_t spacingLevel;
-  uint8_t paragraphAlignment;
-  bool hyphenation;
-  uint16_t viewportWidth;
-  uint16_t viewportHeight;
+  RenderConfig config;
 
   // Image support
   std::string chapterBasePath;
@@ -57,24 +51,14 @@ class ChapterHtmlSlimParser {
   static void XMLCALL endElement(void* userData, const XML_Char* name);
 
  public:
-  explicit ChapterHtmlSlimParser(const std::string& filepath, GfxRenderer& renderer, const int fontId,
-                                 const float lineCompression, const uint8_t indentLevel, const uint8_t spacingLevel,
-                                 const uint8_t paragraphAlignment, const bool hyphenation, const uint16_t viewportWidth,
-                                 const uint16_t viewportHeight,
+  explicit ChapterHtmlSlimParser(const std::string& filepath, GfxRenderer& renderer, const RenderConfig& config,
                                  const std::function<void(std::unique_ptr<Page>)>& completePageFn,
                                  const std::function<void(int)>& progressFn = nullptr,
                                  const std::string& chapterBasePath = "", const std::string& imageCachePath = "",
                                  const std::function<bool(const std::string&, Print&, size_t)>& readItemFn = nullptr)
       : filepath(filepath),
         renderer(renderer),
-        fontId(fontId),
-        lineCompression(lineCompression),
-        indentLevel(indentLevel),
-        spacingLevel(spacingLevel),
-        paragraphAlignment(paragraphAlignment),
-        hyphenation(hyphenation),
-        viewportWidth(viewportWidth),
-        viewportHeight(viewportHeight),
+        config(config),
         completePageFn(completePageFn),
         progressFn(progressFn),
         chapterBasePath(chapterBasePath),

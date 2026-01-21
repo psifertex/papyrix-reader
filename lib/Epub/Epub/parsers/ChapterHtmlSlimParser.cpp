@@ -55,7 +55,7 @@ void ChapterHtmlSlimParser::startNewTextBlock(const TextBlock::BLOCK_STYLE style
 
     makePages();
   }
-  currentTextBlock.reset(new ParsedText(style, indentLevel, hyphenation));
+  currentTextBlock.reset(new ParsedText(style, config.indentLevel, config.hyphenation));
 }
 
 void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char* name, const XML_Char** atts) {
@@ -174,7 +174,7 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
     if (strcmp(name, "br") == 0) {
       self->startNewTextBlock(self->currentTextBlock->getStyle());
     } else {
-      self->startNewTextBlock(static_cast<TextBlock::BLOCK_STYLE>(self->paragraphAlignment));
+      self->startNewTextBlock(static_cast<TextBlock::BLOCK_STYLE>(self->config.paragraphAlignment));
     }
   } else if (matches(name, BOLD_TAGS, NUM_BOLD_TAGS)) {
     self->boldUntilDepth = min(self->boldUntilDepth, self->depth);
@@ -246,7 +246,7 @@ void XMLCALL ChapterHtmlSlimParser::characterData(void* userData, const XML_Char
   if (self->currentTextBlock->size() > 750) {
     Serial.printf("[%lu] [EHP] Text block too long, splitting into multiple pages\n", millis());
     self->currentTextBlock->layoutAndExtractLines(
-        self->renderer, self->fontId, self->viewportWidth,
+        self->renderer, self->config.fontId, self->config.viewportWidth,
         [self](const std::shared_ptr<TextBlock>& textBlock) { self->addLineToPage(textBlock); }, false);
   }
 }
@@ -299,7 +299,7 @@ void XMLCALL ChapterHtmlSlimParser::endElement(void* userData, const XML_Char* n
 }
 
 bool ChapterHtmlSlimParser::parseAndBuildPages() {
-  startNewTextBlock(static_cast<TextBlock::BLOCK_STYLE>(paragraphAlignment));
+  startNewTextBlock(static_cast<TextBlock::BLOCK_STYLE>(config.paragraphAlignment));
 
   const XML_Parser parser = XML_ParserCreate(nullptr);
   int done;
@@ -391,9 +391,9 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
 }
 
 void ChapterHtmlSlimParser::addLineToPage(std::shared_ptr<TextBlock> line) {
-  const int lineHeight = renderer.getLineHeight(fontId) * lineCompression;
+  const int lineHeight = renderer.getLineHeight(config.fontId) * config.lineCompression;
 
-  if (currentPageNextY + lineHeight > viewportHeight) {
+  if (currentPageNextY + lineHeight > config.viewportHeight) {
     completePageFn(std::move(currentPage));
     currentPage.reset(new Page());
     currentPageNextY = 0;
@@ -414,12 +414,12 @@ void ChapterHtmlSlimParser::makePages() {
     currentPageNextY = 0;
   }
 
-  const int lineHeight = renderer.getLineHeight(fontId) * lineCompression;
+  const int lineHeight = renderer.getLineHeight(config.fontId) * config.lineCompression;
   currentTextBlock->layoutAndExtractLines(
-      renderer, fontId, viewportWidth,
+      renderer, config.fontId, config.viewportWidth,
       [this](const std::shared_ptr<TextBlock>& textBlock) { addLineToPage(textBlock); });
   // Extra paragraph spacing based on spacingLevel (0=none, 1=small, 3=large)
-  switch (spacingLevel) {
+  switch (config.spacingLevel) {
     case 1:
       currentPageNextY += lineHeight / 4;  // Small (1/4 line)
       break;
@@ -504,12 +504,12 @@ std::string ChapterHtmlSlimParser::cacheImage(const std::string& src) {
   }
 
   // Max width is viewport, max height is half of viewport to avoid images taking too much vertical space
-  const int maxImageHeight = viewportHeight / 2;
+  const int maxImageHeight = config.viewportHeight / 2;
   bool success;
   if (isPng) {
-    success = PngToBmpConverter::pngFileToBmpStreamWithSize(imageFile, bmpFile, viewportWidth, maxImageHeight);
+    success = PngToBmpConverter::pngFileToBmpStreamWithSize(imageFile, bmpFile, config.viewportWidth, maxImageHeight);
   } else {
-    success = JpegToBmpConverter::jpegFileToBmpStreamWithSize(imageFile, bmpFile, viewportWidth, maxImageHeight);
+    success = JpegToBmpConverter::jpegFileToBmpStreamWithSize(imageFile, bmpFile, config.viewportWidth, maxImageHeight);
   }
 
   bmpFile.close();
@@ -533,7 +533,7 @@ std::string ChapterHtmlSlimParser::cacheImage(const std::string& src) {
 
 void ChapterHtmlSlimParser::addImageToPage(std::shared_ptr<ImageBlock> image) {
   const int imageHeight = image->getHeight();
-  const int lineHeight = renderer.getLineHeight(fontId) * lineCompression;
+  const int lineHeight = renderer.getLineHeight(config.fontId) * config.lineCompression;
 
   if (!currentPage) {
     currentPage.reset(new Page());
@@ -541,14 +541,14 @@ void ChapterHtmlSlimParser::addImageToPage(std::shared_ptr<ImageBlock> image) {
   }
 
   // Check if image fits on current page
-  if (currentPageNextY + imageHeight > viewportHeight) {
+  if (currentPageNextY + imageHeight > config.viewportHeight) {
     completePageFn(std::move(currentPage));
     currentPage.reset(new Page());
     currentPageNextY = 0;
   }
 
   // Center image horizontally (cast to signed to handle images wider than viewport)
-  int xPos = (static_cast<int>(viewportWidth) - static_cast<int>(image->getWidth())) / 2;
+  int xPos = (static_cast<int>(config.viewportWidth) - static_cast<int>(image->getWidth())) / 2;
   if (xPos < 0) xPos = 0;
 
   currentPage->elements.push_back(std::make_shared<PageImage>(image, xPos, currentPageNextY));

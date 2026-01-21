@@ -9,7 +9,7 @@
 #include "parsers/ChapterHtmlSlimParser.h"
 
 namespace {
-constexpr uint8_t SECTION_FILE_VERSION = 13;  // v13: Changed extraParagraphSpacing to indentLevel + spacingLevel
+constexpr uint8_t SECTION_FILE_VERSION = 14;  // v14: Refactored to use RenderConfig struct
 constexpr uint32_t HEADER_SIZE = sizeof(uint8_t) + sizeof(int) + sizeof(float) + sizeof(uint8_t) + sizeof(uint8_t) +
                                  sizeof(uint8_t) + sizeof(bool) + sizeof(bool) + sizeof(uint16_t) + sizeof(uint16_t) +
                                  sizeof(uint16_t) + sizeof(uint32_t);
@@ -32,36 +32,32 @@ uint32_t Section::onPageComplete(std::unique_ptr<Page> page) {
   return position;
 }
 
-void Section::writeSectionFileHeader(const int fontId, const float lineCompression, const uint8_t indentLevel,
-                                     const uint8_t spacingLevel, const uint8_t paragraphAlignment,
-                                     const bool hyphenation, const bool showImages, const uint16_t viewportWidth,
-                                     const uint16_t viewportHeight) {
+void Section::writeSectionFileHeader(const RenderConfig& config) {
   if (!file) {
     Serial.printf("[%lu] [SCT] File not open for writing header\n", millis());
     return;
   }
-  static_assert(HEADER_SIZE == sizeof(SECTION_FILE_VERSION) + sizeof(fontId) + sizeof(lineCompression) +
-                                   sizeof(indentLevel) + sizeof(spacingLevel) + sizeof(paragraphAlignment) +
-                                   sizeof(hyphenation) + sizeof(showImages) + sizeof(viewportWidth) +
-                                   sizeof(viewportHeight) + sizeof(pageCount) + sizeof(uint32_t),
+  static_assert(HEADER_SIZE == sizeof(SECTION_FILE_VERSION) + sizeof(config.fontId) + sizeof(config.lineCompression) +
+                                   sizeof(config.indentLevel) + sizeof(config.spacingLevel) +
+                                   sizeof(config.paragraphAlignment) + sizeof(config.hyphenation) +
+                                   sizeof(config.showImages) + sizeof(config.viewportWidth) +
+                                   sizeof(config.viewportHeight) + sizeof(pageCount) + sizeof(uint32_t),
                 "Header size mismatch");
   serialization::writePod(file, SECTION_FILE_VERSION);
-  serialization::writePod(file, fontId);
-  serialization::writePod(file, lineCompression);
-  serialization::writePod(file, indentLevel);
-  serialization::writePod(file, spacingLevel);
-  serialization::writePod(file, paragraphAlignment);
-  serialization::writePod(file, hyphenation);
-  serialization::writePod(file, showImages);
-  serialization::writePod(file, viewportWidth);
-  serialization::writePod(file, viewportHeight);
+  serialization::writePod(file, config.fontId);
+  serialization::writePod(file, config.lineCompression);
+  serialization::writePod(file, config.indentLevel);
+  serialization::writePod(file, config.spacingLevel);
+  serialization::writePod(file, config.paragraphAlignment);
+  serialization::writePod(file, config.hyphenation);
+  serialization::writePod(file, config.showImages);
+  serialization::writePod(file, config.viewportWidth);
+  serialization::writePod(file, config.viewportHeight);
   serialization::writePod(file, pageCount);  // Placeholder for page count (will be initially 0 when written)
   serialization::writePod(file, static_cast<uint32_t>(0));  // Placeholder for LUT offset
 }
 
-bool Section::loadSectionFile(const int fontId, const float lineCompression, const uint8_t indentLevel,
-                              const uint8_t spacingLevel, const uint8_t paragraphAlignment, const bool hyphenation,
-                              const bool showImages, const uint16_t viewportWidth, const uint16_t viewportHeight) {
+bool Section::loadSectionFile(const RenderConfig& config) {
   if (!SdMan.openFileForRead("SCT", filePath, file)) {
     return false;
   }
@@ -77,28 +73,18 @@ bool Section::loadSectionFile(const int fontId, const float lineCompression, con
       return false;
     }
 
-    int fileFontId;
-    uint16_t fileViewportWidth, fileViewportHeight;
-    float fileLineCompression;
-    uint8_t fileIndentLevel;
-    uint8_t fileSpacingLevel;
-    uint8_t fileParagraphAlignment;
-    bool fileHyphenation;
-    bool fileShowImages;
-    serialization::readPod(file, fileFontId);
-    serialization::readPod(file, fileLineCompression);
-    serialization::readPod(file, fileIndentLevel);
-    serialization::readPod(file, fileSpacingLevel);
-    serialization::readPod(file, fileParagraphAlignment);
-    serialization::readPod(file, fileHyphenation);
-    serialization::readPod(file, fileShowImages);
-    serialization::readPod(file, fileViewportWidth);
-    serialization::readPod(file, fileViewportHeight);
+    RenderConfig fileConfig;
+    serialization::readPod(file, fileConfig.fontId);
+    serialization::readPod(file, fileConfig.lineCompression);
+    serialization::readPod(file, fileConfig.indentLevel);
+    serialization::readPod(file, fileConfig.spacingLevel);
+    serialization::readPod(file, fileConfig.paragraphAlignment);
+    serialization::readPod(file, fileConfig.hyphenation);
+    serialization::readPod(file, fileConfig.showImages);
+    serialization::readPod(file, fileConfig.viewportWidth);
+    serialization::readPod(file, fileConfig.viewportHeight);
 
-    if (fontId != fileFontId || lineCompression != fileLineCompression || indentLevel != fileIndentLevel ||
-        spacingLevel != fileSpacingLevel || paragraphAlignment != fileParagraphAlignment ||
-        hyphenation != fileHyphenation || showImages != fileShowImages || viewportWidth != fileViewportWidth ||
-        viewportHeight != fileViewportHeight) {
+    if (config != fileConfig) {
       file.close();
       Serial.printf("[%lu] [SCT] Deserialization failed: Parameters do not match\n", millis());
       clearCache();
@@ -128,10 +114,7 @@ bool Section::clearCache() const {
   return true;
 }
 
-bool Section::createSectionFile(const int fontId, const float lineCompression, const uint8_t indentLevel,
-                                const uint8_t spacingLevel, const uint8_t paragraphAlignment, const bool hyphenation,
-                                const uint16_t viewportWidth, const uint16_t viewportHeight, const bool showImages,
-                                const std::function<void()>& progressSetupFn,
+bool Section::createSectionFile(const RenderConfig& config, const std::function<void()>& progressSetupFn,
                                 const std::function<void(int)>& progressFn) {
   constexpr uint32_t MIN_SIZE_FOR_PROGRESS = 50 * 1024;  // 50KB
   const auto localPath = epub->getSpineItem(spineIndex).href;
@@ -153,7 +136,7 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
       chapterBasePath = localPath.substr(0, lastSlash + 1);
     }
   }
-  const std::string imageCachePath = showImages ? (epub->getCachePath() + "/images") : "";
+  const std::string imageCachePath = config.showImages ? (epub->getCachePath() + "/images") : "";
 
   // Retry logic for SD card timing issues
   bool success = false;
@@ -211,8 +194,7 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
     SdMan.remove(normalizedPath.c_str());
     return false;
   }
-  writeSectionFileHeader(fontId, lineCompression, indentLevel, spacingLevel, paragraphAlignment, hyphenation,
-                         showImages, viewportWidth, viewportHeight);
+  writeSectionFileHeader(config);
   std::vector<uint32_t> lut = {};
 
   // Create readItemFn callback for extracting images from EPUB
@@ -221,8 +203,7 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
   };
 
   ChapterHtmlSlimParser visitor(
-      parseHtmlPath, renderer, fontId, lineCompression, indentLevel, spacingLevel, paragraphAlignment, hyphenation,
-      viewportWidth, viewportHeight,
+      parseHtmlPath, renderer, config,
       [this, &lut](std::unique_ptr<Page> page) { lut.emplace_back(this->onPageComplete(std::move(page))); }, progressFn,
       chapterBasePath, imageCachePath, readItemFn);
   success = visitor.parseAndBuildPages();

@@ -1,4 +1,6 @@
 #pragma once
+#include <Epub/RenderConfig.h>
+
 #include <cstdint>
 #include <iosfwd>
 
@@ -146,6 +148,11 @@ class CrossPointSettings {
       default:
         return 1;
     }
+  }
+
+  RenderConfig getRenderConfig(uint16_t viewportWidth, uint16_t viewportHeight) const {
+    return RenderConfig(getReaderFontId(), 0.95f, getIndentLevel(), getSpacingLevel(), paragraphAlignment,
+                        static_cast<bool>(hyphenation), static_cast<bool>(showImages), viewportWidth, viewportHeight);
   }
 
   bool saveToFile() const;
