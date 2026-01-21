@@ -6,10 +6,11 @@
 #include <algorithm>
 #include <cmath>
 #include <functional>
-#include <limits>
 #include <vector>
 
-constexpr int MAX_COST = std::numeric_limits<int>::max();
+// Knuth-Plass algorithm constants
+constexpr float INFINITY_PENALTY = 10000.0f;
+constexpr float LINE_PENALTY = 50.0f;
 
 // Soft hyphen (U+00AD) as UTF-8 bytes
 constexpr unsigned char SOFT_HYPHEN_BYTE1 = 0xC2;
@@ -76,6 +77,23 @@ bool isCjkCodepoint(uint32_t cp) {
   // Fullwidth ASCII variants (often used in CJK context)
   if (cp >= 0xFF00 && cp <= 0xFFEF) return true;
   return false;
+}
+
+// Knuth-Plass: Calculate badness (looseness) of a line
+// Returns cubic ratio penalty - loose lines are penalized more heavily
+float calculateBadness(int lineWidth, int targetWidth) {
+  if (lineWidth > targetWidth) return INFINITY_PENALTY;
+  if (lineWidth == targetWidth) return 0.0f;
+  float ratio = static_cast<float>(targetWidth - lineWidth) / static_cast<float>(targetWidth);
+  return ratio * ratio * ratio * 100.0f;
+}
+
+// Knuth-Plass: Calculate demerits for a line based on its badness
+// Last line gets 0 demerits (allowed to be loose)
+float calculateDemerits(float badness, bool isLastLine) {
+  if (badness >= INFINITY_PENALTY) return INFINITY_PENALTY;
+  if (isLastLine) return 0.0f;
+  return (1.0f + badness) * (1.0f + badness);
 }
 
 }  // namespace
@@ -223,79 +241,64 @@ std::vector<uint16_t> ParsedText::calculateWordWidths(const GfxRenderer& rendere
 
 std::vector<size_t> ParsedText::computeLineBreaks(const int pageWidth, const int spaceWidth,
                                                   const std::vector<uint16_t>& wordWidths) const {
-  const size_t totalWordCount = words.size();
+  const size_t n = words.size();
 
-  // DP table to store the minimum badness (cost) of lines starting at index i
-  std::vector<int> dp(totalWordCount);
-  // 'ans[i]' stores the index 'j' of the *last word* in the optimal line starting at 'i'
-  // Using uint16_t saves memory (was size_t/4 bytes on ESP32, now 2 bytes per word)
-  std::vector<uint16_t> ans(totalWordCount);
+  if (n == 0) {
+    return {};
+  }
 
-  // Base Case
-  dp[totalWordCount - 1] = 0;
-  ans[totalWordCount - 1] = totalWordCount - 1;
+  // Forward DP: minDemerits[i] = minimum demerits to reach position i (before word i)
+  std::vector<float> minDemerits(n + 1, INFINITY_PENALTY);
+  std::vector<int> prevBreak(n + 1, -1);
+  minDemerits[0] = 0.0f;
 
-  for (int i = totalWordCount - 2; i >= 0; --i) {
-    int currlen = -spaceWidth;
-    dp[i] = MAX_COST;
+  for (size_t i = 0; i < n; i++) {
+    if (minDemerits[i] >= INFINITY_PENALTY) continue;
 
-    for (size_t j = i; j < totalWordCount; ++j) {
-      // Current line length: previous width + space + current word width
-      currlen += wordWidths[j] + spaceWidth;
+    int lineWidth = -spaceWidth;  // First word won't have preceding space
+    for (size_t j = i; j < n; j++) {
+      lineWidth += wordWidths[j] + spaceWidth;
 
-      if (currlen > pageWidth) {
+      if (lineWidth > pageWidth) {
+        if (j == i) {
+          // Oversized word: force onto its own line with high penalty
+          float demerits = 100.0f + LINE_PENALTY;
+          if (minDemerits[i] + demerits < minDemerits[j + 1]) {
+            minDemerits[j + 1] = minDemerits[i] + demerits;
+            prevBreak[j + 1] = static_cast<int>(i);
+          }
+        }
         break;
       }
 
-      int cost;
-      if (j == totalWordCount - 1) {
-        cost = 0;  // Last line
-      } else {
-        const int remainingSpace = pageWidth - currlen;
-        // Use long long for the square to prevent overflow
-        const long long cost_ll = static_cast<long long>(remainingSpace) * remainingSpace + dp[j + 1];
+      bool isLastLine = (j == n - 1);
+      float badness = calculateBadness(lineWidth, pageWidth);
+      float demerits = calculateDemerits(badness, isLastLine) + LINE_PENALTY;
 
-        if (cost_ll > MAX_COST) {
-          cost = MAX_COST;
-        } else {
-          cost = static_cast<int>(cost_ll);
-        }
-      }
-
-      if (cost < dp[i]) {
-        dp[i] = cost;
-        ans[i] = j;  // j is the index of the last word in this optimal line
-      }
-    }
-
-    // Handle oversized word: if no valid configuration found, force single-word line
-    // This prevents cascade failure where one oversized word breaks all preceding words
-    if (dp[i] == MAX_COST) {
-      ans[i] = i;  // Just this word on its own line
-      // Inherit cost from next word to allow subsequent words to find valid configurations
-      if (i + 1 < static_cast<int>(totalWordCount)) {
-        dp[i] = dp[i + 1];
-      } else {
-        dp[i] = 0;
+      if (minDemerits[i] + demerits < minDemerits[j + 1]) {
+        minDemerits[j + 1] = minDemerits[i] + demerits;
+        prevBreak[j + 1] = static_cast<int>(i);
       }
     }
   }
 
-  // Stores the index of the word that starts the next line (last_word_index + 1)
+  // Backtrack to reconstruct line break indices
   std::vector<size_t> lineBreakIndices;
-  size_t currentWordIndex = 0;
+  int pos = static_cast<int>(n);
+  while (pos > 0 && prevBreak[pos] >= 0) {
+    lineBreakIndices.push_back(static_cast<size_t>(pos));
+    pos = prevBreak[pos];
+  }
+  std::reverse(lineBreakIndices.begin(), lineBreakIndices.end());
 
-  while (currentWordIndex < totalWordCount) {
-    size_t nextBreakIndex = ans[currentWordIndex] + 1;
-
-    // Safety check: prevent infinite loop if nextBreakIndex doesn't advance
-    if (nextBreakIndex <= currentWordIndex) {
-      // Force advance by at least one word to avoid infinite loop
-      nextBreakIndex = currentWordIndex + 1;
+  // Fallback: if backtracking failed or chain is incomplete, use single-word-per-line
+  // After the loop, pos should be 0 if we successfully traced back to the start.
+  // If pos > 0, the chain is incomplete (no valid path from position 0 to n).
+  if (lineBreakIndices.empty() || pos != 0) {
+    lineBreakIndices.clear();
+    for (size_t i = 1; i <= n; i++) {
+      lineBreakIndices.push_back(i);
     }
-
-    lineBreakIndices.push_back(nextBreakIndex);
-    currentWordIndex = nextBreakIndex;
   }
 
   return lineBreakIndices;

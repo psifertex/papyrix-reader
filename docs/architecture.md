@@ -79,3 +79,39 @@ EPUB Load → ContentOpfParser → CssParser → ChapterHtmlSlimParser → Page
 - `lib/Epub/Epub/css/CssStyle.h` — Style enums and struct
 - `lib/Epub/Epub/css/CssParser.h/cpp` — CSS file parsing
 - `lib/Epub/Epub/parsers/ChapterHtmlSlimParser.cpp` — Style application during HTML parsing
+
+## Text Layout
+
+### Line Breaking Algorithm
+
+Papyrix uses the **Knuth-Plass algorithm** for optimal line breaking, the same algorithm used by TeX. This produces higher-quality justified text than greedy algorithms.
+
+```
+Words → calculateWordWidths() → computeLineBreaks() → extractLine() → TextBlock
+```
+
+### How It Works
+
+1. **Forward Dynamic Programming**: Evaluates all possible line break points
+2. **Badness**: Measures line looseness using cubic ratio: `((target - actual) / target)³ × 100`
+3. **Demerits**: Cost function `(1 + badness)²` penalizes loose lines
+4. **Line Penalty**: Constant `+50` per line favors fewer total lines
+5. **Last Line**: Zero demerits (allowed to be loose, as in book typography)
+
+### Cost Function
+
+```
+badness = ((pageWidth - lineWidth) / pageWidth)³ × 100
+demerits = (1 + badness)² + LINE_PENALTY
+```
+
+Lines exceeding page width get infinite penalty. Oversized words that can't fit are forced onto their own line with a fixed penalty.
+
+### Key Files
+
+- `lib/Epub/Epub/ParsedText.cpp` — Line breaking implementation
+- `lib/Epub/Epub/ParsedText.h` — ParsedText class definition
+
+### Reference
+
+- Knuth, D. E., & Plass, M. F. (1981). *Breaking paragraphs into lines.* Software: Practice and Experience, 11(11), 1119-1184. [DOI:10.1002/spe.4380111102](https://doi.org/10.1002/spe.4380111102)

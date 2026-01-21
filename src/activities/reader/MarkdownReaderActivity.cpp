@@ -264,7 +264,7 @@ void MarkdownReaderActivity::renderScreen() {
     return;
   }
 
-  if (section->currentPage < 0 || section->currentPage >= section->pageCount) {
+  if (section->currentPage < 0) {
     Serial.printf("[%lu] [MDR] Page out of bounds: %d (max %d)\n", millis(), section->currentPage, section->pageCount);
     renderer.drawCenteredText(SETTINGS.getReaderFontId(), 300, "Out of bounds", THEME.primaryTextBlack, BOLD);
     renderStatusBar(orientedMarginRight, orientedMarginBottom, orientedMarginLeft);
