@@ -1,9 +1,10 @@
 #include <Arduino.h>
+#include <LittleFS.h>
+
 #include <EInkDisplay.h>
 #include <Epub.h>
 #include <GfxRenderer.h>
 #include <InputManager.h>
-#include <LittleFS.h>
 #include <SDCardManager.h>
 #include <SPI.h>
 #include <builtinFonts/reader_2b.h>
