@@ -673,7 +673,15 @@ void GfxRenderer::renderChar(const EpdFontFamily& fontFamily, const uint32_t cp,
                              const bool pixelState, const EpdFontFamily::Style style) const {
   const EpdGlyph* glyph = fontFamily.getGlyph(cp, style);
   if (!glyph) {
-    // TODO: Replace with fallback glyph property?
+    // For whitespace characters missing from font, advance by space width instead of rendering '?'
+    if (cp == 0x2002 || cp == 0x2003 || cp == 0x00A0) {  // EN SPACE, EM SPACE, NBSP
+      const EpdGlyph* spaceGlyph = fontFamily.getGlyph(' ', style);
+      if (spaceGlyph) {
+        *x += spaceGlyph->advanceX;
+        if (cp == 0x2003) *x += spaceGlyph->advanceX;  // EM SPACE = 2x width
+        return;
+      }
+    }
     glyph = fontFamily.getGlyph('?', style);
   }
 
