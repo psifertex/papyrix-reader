@@ -391,11 +391,13 @@ bool ZipFile::readFileToStream(const char* filename, Print& out, const size_t ch
 
   FileStatSlim fileStat = {};
   if (!loadFileStatSlim(filename, &fileStat)) {
+    if (!wasOpen) close();
     return false;
   }
 
   const long fileOffset = getDataOffset(fileStat);
   if (fileOffset < 0) {
+    if (!wasOpen) close();
     return false;
   }
 

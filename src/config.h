@@ -49,9 +49,14 @@
 
 // System directory for settings and cache
 #define PAPYRIX_DIR "/.papyrix"
+#define PAPYRIX_CACHE_DIR PAPYRIX_DIR "/cache"
 #define PAPYRIX_SETTINGS_FILE PAPYRIX_DIR "/settings.bin"
 #define PAPYRIX_STATE_FILE PAPYRIX_DIR "/state.bin"
 #define PAPYRIX_WIFI_FILE PAPYRIX_DIR "/wifi.bin"
+
+// Thumbnail dimensions for home screen
+#define THUMB_WIDTH 240
+#define THUMB_HEIGHT 400
 
 // User configuration directory
 #define CONFIG_DIR "/config"

@@ -60,9 +60,10 @@ class ThemeManager {
   /**
    * List available theme files on SD card.
    * Also pre-caches theme configurations for instant switching.
+   * @param forceRefresh If true, clears cache and reloads all themes from disk
    * @return Vector of theme names (without .theme extension)
    */
-  std::vector<std::string> listAvailableThemes();
+  std::vector<std::string> listAvailableThemes(bool forceRefresh = false);
 
   /**
    * Apply a cached theme instantly (no file I/O).
@@ -76,6 +77,12 @@ class ThemeManager {
    * Check if a theme is cached.
    */
   bool isThemeCached(const char* themeName) const;
+
+  /**
+   * Clear the theme cache to free memory.
+   * Call before entering memory-intensive states.
+   */
+  void clearCache() { themeCache.clear(); }
 
   /**
    * Create default theme files on SD card if they don't exist.

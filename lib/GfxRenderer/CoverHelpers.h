@@ -46,8 +46,9 @@ inline CenteredRect calculateCenteredRect(int imageWidth, int imageHeight, int v
 // Render a cover BMP file with proper centering and grayscale support
 // Returns true if cover was rendered successfully, false otherwise
 // Updates pagesUntilFullRefresh based on refresh logic
+// pagesPerRefreshValue: number of pages between full refreshes (from settings)
 bool renderCoverFromBmp(GfxRenderer& renderer, const std::string& bmpPath, int marginTop, int marginRight,
-                        int marginBottom, int marginLeft, int& pagesUntilFullRefresh);
+                        int marginBottom, int marginLeft, int& pagesUntilFullRefresh, int pagesPerRefreshValue);
 
 // Find a cover image file in the given directory
 // Looks for: baseName.jpg, baseName.jpeg, baseName.png, baseName.bmp, cover.jpg, etc.
@@ -56,10 +57,16 @@ std::string findCoverImage(const std::string& dirPath, const std::string& baseNa
 
 // Convert an image file (JPG, PNG, or BMP) to BMP format
 // For BMP input, just copies the file
-// For JPG, uses JpegToBmpConverter
+// For JPG, uses JpegToBmpConverter (1-bit if use1BitDithering is true)
 // For PNG, uses PngToBmpConverter
 // logTag is used for Serial logging (e.g., "TXT", "MD ")
 // Returns true on success
-bool convertImageToBmp(const std::string& inputPath, const std::string& outputPath, const char* logTag);
+bool convertImageToBmp(const std::string& inputPath, const std::string& outputPath, const char* logTag,
+                       bool use1BitDithering);
+
+// Generate thumbnail BMP from full-size cover BMP
+// Uses atomic write (temp file + rename) for safety
+// Returns true on success
+bool generateThumbFromCover(const std::string& coverBmpPath, const std::string& thumbBmpPath, const char* logTag);
 
 }  // namespace CoverHelpers

@@ -22,7 +22,7 @@ bool ThemeManager::loadTheme(const char* name) {
   }
 
   // Build path
-  char path[64];
+  char path[128];
   snprintf(path, sizeof(path), "%s/%s.theme", CONFIG_THEMES_DIR, name);
 
   // Try to load from file
@@ -92,6 +92,10 @@ bool ThemeManager::loadFromFileToTheme(const char* path, Theme& theme) {
         theme.itemHeight = static_cast<uint8_t>(IniParser::parseInt(value, 30));
       } else if (strcmp(key, "item_spacing") == 0) {
         theme.itemSpacing = static_cast<uint8_t>(IniParser::parseInt(value, 0));
+      } else if (strcmp(key, "item_padding_x") == 0) {
+        theme.itemPaddingX = static_cast<uint8_t>(IniParser::parseInt(value, 8));
+      } else if (strcmp(key, "item_value_padding") == 0) {
+        theme.itemValuePadding = static_cast<uint8_t>(IniParser::parseInt(value, 20));
       } else if (strcmp(key, "front_buttons") == 0) {
         theme.frontButtonLayout = (strcmp(value, "lrbc") == 0) ? FRONT_LRBC : FRONT_BCLR;
       }
@@ -143,7 +147,7 @@ bool ThemeManager::saveTheme(const char* name) {
     SdMan.mkdir(CONFIG_THEMES_DIR);
   }
 
-  char path[64];
+  char path[128];
   snprintf(path, sizeof(path), "%s/%s.theme", CONFIG_THEMES_DIR, name);
 
   return saveToFile(path, activeTheme);
@@ -181,6 +185,8 @@ bool ThemeManager::saveToFile(const char* path, const Theme& theme) {
   file.printf("margin_side = %d\n", theme.screenMarginSide);
   file.printf("item_height = %d\n", theme.itemHeight);
   file.printf("item_spacing = %d\n", theme.itemSpacing);
+  file.printf("item_padding_x = %d\n", theme.itemPaddingX);
+  file.printf("item_value_padding = %d\n", theme.itemValuePadding);
   file.printf("front_buttons = %s\n", theme.frontButtonLayout == FRONT_LRBC ? "lrbc" : "bclr");
   file.println();
 
@@ -204,11 +210,13 @@ void ThemeManager::applyDarkTheme() {
   strncpy(themeName, "dark", sizeof(themeName));
 }
 
-std::vector<std::string> ThemeManager::listAvailableThemes() {
+std::vector<std::string> ThemeManager::listAvailableThemes(bool forceRefresh) {
   std::vector<std::string> themes;
 
-  // Clear and rebuild cache to handle added/removed themes
-  themeCache.clear();
+  // Only rebuild cache if explicitly requested
+  if (forceRefresh) {
+    themeCache.clear();
+  }
 
   // Always include builtin themes and cache them
   themes.push_back("light");
@@ -231,10 +239,16 @@ std::vector<std::string> ThemeManager::listAvailableThemes() {
 
       // Check for .theme extension
       if (len > 6 && strcmp(name + len - 6, ".theme") == 0) {
-        // Extract name without extension
-        char themeNameBuf[32];
         size_t nameLen = len - 6;
-        if (nameLen >= sizeof(themeNameBuf)) nameLen = sizeof(themeNameBuf) - 1;
+
+        // Skip themes with names too long for buffer
+        char themeNameBuf[32];
+        if (nameLen >= sizeof(themeNameBuf)) {
+          Serial.printf("[THEME] Skipping theme with name too long: %s\n", name);
+          entry.close();
+          continue;
+        }
+
         strncpy(themeNameBuf, name, nameLen);
         themeNameBuf[nameLen] = '\0';
 
@@ -243,7 +257,7 @@ std::vector<std::string> ThemeManager::listAvailableThemes() {
           themes.push_back(themeNameBuf);
 
           // Pre-cache theme configuration
-          char path[64];
+          char path[128];
           snprintf(path, sizeof(path), "%s/%s", CONFIG_THEMES_DIR, name);
           Theme cachedTheme;
           if (loadFromFileToTheme(path, cachedTheme)) {
@@ -266,14 +280,14 @@ void ThemeManager::createDefaultThemeFiles() {
   }
 
   // Create light.theme if it doesn't exist
-  char lightPath[64];
+  char lightPath[128];
   snprintf(lightPath, sizeof(lightPath), "%s/light.theme", CONFIG_THEMES_DIR);
   if (!SdMan.exists(lightPath)) {
     saveToFile(lightPath, BUILTIN_LIGHT_THEME);
   }
 
   // Create dark.theme if it doesn't exist
-  char darkPath[64];
+  char darkPath[128];
   snprintf(darkPath, sizeof(darkPath), "%s/dark.theme", CONFIG_THEMES_DIR);
   if (!SdMan.exists(darkPath)) {
     saveToFile(darkPath, BUILTIN_DARK_THEME);

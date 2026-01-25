@@ -3,4 +3,9 @@
 
 #define BAT_GPIO0 0  // Battery voltage
 
-static BatteryMonitor battery(BAT_GPIO0);
+inline BatteryMonitor& getBatteryMonitor() {
+  static BatteryMonitor instance(BAT_GPIO0);
+  return instance;
+}
+
+#define batteryMonitor getBatteryMonitor()

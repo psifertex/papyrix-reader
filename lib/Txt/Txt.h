@@ -51,9 +51,11 @@ class Txt {
   const std::string& getTitle() const { return title; }
   size_t getFileSize() const { return fileSize; }
 
-  // Cover image support (for sleep screen)
+  // Cover image support (for sleep screen and home view)
   std::string getCoverBmpPath() const;
-  bool generateCoverBmp() const;
+  bool generateCoverBmp(bool use1BitDithering = false) const;
+  std::string getThumbBmpPath() const;
+  bool generateThumbBmp() const;
 
   /**
    * Read content from file at specified offset

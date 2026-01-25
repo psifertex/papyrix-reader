@@ -26,6 +26,13 @@ bool IniParser::parseFile(const char* path, Callback callback) {
     }
     line[len] = '\0';
 
+    // Discard remainder of long lines
+    if (len == sizeof(line) - 1) {
+      while (file.available()) {
+        if (file.read() == '\n') break;
+      }
+    }
+
     // Check if this is a section header
     trimWhitespace(line);
     if (line[0] == '[') {
@@ -66,6 +73,12 @@ bool IniParser::parseString(const char* content, Callback callback) {
       ptr++;
     }
     line[len] = '\0';
+
+    // Discard remainder of long lines
+    if (len == sizeof(line) - 1) {
+      while (*ptr && *ptr != '\n') ptr++;
+    }
+
     if (*ptr == '\n') ptr++;
 
     // Check if this is a section header

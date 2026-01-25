@@ -95,6 +95,9 @@ void FontManager::freeFont(LoadedFont& font) {
 void FontManager::unloadFontFamily(int fontId) {
   auto it = loadedFamilies.find(fontId);
   if (it != loadedFamilies.end()) {
+    if (renderer) {
+      renderer->removeFont(fontId);
+    }
     for (auto& f : it->second.fonts) {
       freeFont(f);
     }
@@ -105,6 +108,9 @@ void FontManager::unloadFontFamily(int fontId) {
 
 void FontManager::unloadAllFonts() {
   for (auto& pair : loadedFamilies) {
+    if (renderer) {
+      renderer->removeFont(pair.second.fontId);
+    }
     for (auto& f : pair.second.fonts) {
       freeFont(f);
     }

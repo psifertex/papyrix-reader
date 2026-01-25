@@ -362,6 +362,7 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
   startNewTextBlock(static_cast<TextBlock::BLOCK_STYLE>(config.paragraphAlignment));
 
   const XML_Parser parser = XML_ParserCreate(nullptr);
+  xmlParser_ = parser;  // Store for stopping mid-parse
   int done;
 
   if (!parser) {
@@ -392,7 +393,10 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
       XML_SetElementHandler(parser, nullptr, nullptr);  // Clear callbacks
       XML_SetCharacterDataHandler(parser, nullptr);
       XML_ParserFree(parser);
+      xmlParser_ = nullptr;
       file.close();
+      currentPage.reset();
+      currentTextBlock.reset();
       return false;
     }
 
@@ -404,7 +408,10 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
       XML_SetElementHandler(parser, nullptr, nullptr);  // Clear callbacks
       XML_SetCharacterDataHandler(parser, nullptr);
       XML_ParserFree(parser);
+      xmlParser_ = nullptr;
       file.close();
+      currentPage.reset();
+      currentTextBlock.reset();
       return false;
     }
 
@@ -428,7 +435,10 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
       XML_SetElementHandler(parser, nullptr, nullptr);  // Clear callbacks
       XML_SetCharacterDataHandler(parser, nullptr);
       XML_ParserFree(parser);
+      xmlParser_ = nullptr;
       file.close();
+      currentPage.reset();
+      currentTextBlock.reset();
       return false;
     }
   } while (!done);
@@ -437,12 +447,15 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
   XML_SetElementHandler(parser, nullptr, nullptr);  // Clear callbacks
   XML_SetCharacterDataHandler(parser, nullptr);
   XML_ParserFree(parser);
+  xmlParser_ = nullptr;
   file.close();
 
   // Process last page if there is still text
-  if (currentTextBlock) {
+  if (currentTextBlock && !stopRequested_) {
     makePages();
-    completePageFn(std::move(currentPage));
+    if (!stopRequested_ && currentPage) {
+      completePageFn(std::move(currentPage));
+    }
     currentPage.reset();
     currentTextBlock.reset();
   }
@@ -451,10 +464,18 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
 }
 
 void ChapterHtmlSlimParser::addLineToPage(std::shared_ptr<TextBlock> line) {
+  if (stopRequested_) return;
+
   const int lineHeight = renderer.getLineHeight(config.fontId) * config.lineCompression;
 
   if (currentPageNextY + lineHeight > config.viewportHeight) {
-    completePageFn(std::move(currentPage));
+    if (!completePageFn(std::move(currentPage))) {
+      stopRequested_ = true;
+      if (xmlParser_) {
+        XML_StopParser(xmlParser_, XML_FALSE);
+      }
+      return;
+    }
     currentPage.reset(new Page());
     currentPageNextY = 0;
   }
@@ -588,6 +609,8 @@ std::string ChapterHtmlSlimParser::cacheImage(const std::string& src) {
 }
 
 void ChapterHtmlSlimParser::addImageToPage(std::shared_ptr<ImageBlock> image) {
+  if (stopRequested_) return;
+
   const int imageHeight = image->getHeight();
   const int lineHeight = renderer.getLineHeight(config.fontId) * config.lineCompression;
 
@@ -598,7 +621,13 @@ void ChapterHtmlSlimParser::addImageToPage(std::shared_ptr<ImageBlock> image) {
 
   // Check if image fits on current page
   if (currentPageNextY + imageHeight > config.viewportHeight) {
-    completePageFn(std::move(currentPage));
+    if (!completePageFn(std::move(currentPage))) {
+      stopRequested_ = true;
+      if (xmlParser_) {
+        XML_StopParser(xmlParser_, XML_FALSE);
+      }
+      return;
+    }
     currentPage.reset(new Page());
     currentPageNextY = 0;
   }

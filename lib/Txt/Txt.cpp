@@ -95,16 +95,29 @@ std::string Txt::findCoverImage() const {
   return CoverHelpers::findCoverImage(dirPath, title);
 }
 
-bool Txt::generateCoverBmp() const {
+bool Txt::generateCoverBmp(bool use1BitDithering) const {
+  const auto coverPath = getCoverBmpPath();
+  const auto failedMarkerPath = cachePath + "/.cover.failed";
+
   // Already generated
-  if (SdMan.exists(getCoverBmpPath().c_str())) {
+  if (SdMan.exists(coverPath.c_str())) {
     return true;
+  }
+
+  // Previously failed, don't retry
+  if (SdMan.exists(failedMarkerPath.c_str())) {
+    return false;
   }
 
   // Find a cover image
   std::string coverImagePath = findCoverImage();
   if (coverImagePath.empty()) {
     Serial.printf("[%lu] [TXT] No cover image found\n", millis());
+    // Create failure marker
+    FsFile marker;
+    if (SdMan.openFileForWrite("TXT", failedMarkerPath, marker)) {
+      marker.close();
+    }
     return false;
   }
 
@@ -112,7 +125,50 @@ bool Txt::generateCoverBmp() const {
   setupCacheDir();
 
   // Convert to BMP using shared helper
-  return CoverHelpers::convertImageToBmp(coverImagePath, getCoverBmpPath(), "TXT");
+  const bool success = CoverHelpers::convertImageToBmp(coverImagePath, coverPath, "TXT", use1BitDithering);
+  if (!success) {
+    // Create failure marker
+    FsFile marker;
+    if (SdMan.openFileForWrite("TXT", failedMarkerPath, marker)) {
+      marker.close();
+    }
+  }
+  return success;
+}
+
+std::string Txt::getThumbBmpPath() const { return cachePath + "/thumb.bmp"; }
+
+bool Txt::generateThumbBmp() const {
+  const auto thumbPath = getThumbBmpPath();
+  const auto failedMarkerPath = cachePath + "/.thumb.failed";
+
+  if (SdMan.exists(thumbPath.c_str())) return true;
+
+  // Previously failed, don't retry
+  if (SdMan.exists(failedMarkerPath.c_str())) {
+    return false;
+  }
+
+  if (!SdMan.exists(getCoverBmpPath().c_str()) && !generateCoverBmp(true)) {
+    // Create failure marker
+    FsFile marker;
+    if (SdMan.openFileForWrite("TXT", failedMarkerPath, marker)) {
+      marker.close();
+    }
+    return false;
+  }
+
+  setupCacheDir();
+
+  const bool success = CoverHelpers::generateThumbFromCover(getCoverBmpPath(), thumbPath, "TXT");
+  if (!success) {
+    // Create failure marker
+    FsFile marker;
+    if (SdMan.openFileForWrite("TXT", failedMarkerPath, marker)) {
+      marker.close();
+    }
+  }
+  return success;
 }
 
 size_t Txt::readContent(uint8_t* buffer, size_t offset, size_t length) const {

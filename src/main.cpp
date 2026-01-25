@@ -1,9 +1,10 @@
+#include <LittleFS.h>  // Must be first to avoid FILE_READ/FILE_WRITE redefinition with SdFat
+
 #include <Arduino.h>
 #include <EInkDisplay.h>
 #include <Epub.h>
 #include <GfxRenderer.h>
 #include <InputManager.h>
-#include <LittleFS.h>
 #include <SDCardManager.h>
 #include <SPI.h>
 #include <builtinFonts/reader_2b.h>
@@ -24,23 +25,23 @@
 #include <builtinFonts/ui_bold_12.h>
 
 #include "Battery.h"
-#include "CrossPointSettings.h"
-#include "CrossPointState.h"
 #include "FontManager.h"
 #include "MappedInputManager.h"
 #include "ThemeManager.h"
-#include "activities/boot_sleep/BootActivity.h"
-#include "activities/boot_sleep/SleepActivity.h"
-#include "activities/home/HomeActivity.h"
-#include "activities/network/CalibreConnectionActivity.h"
-#include "activities/network/CrossPointWebServerActivity.h"
-#include "activities/opds/OpdsBookBrowserActivity.h"
-#include "activities/opds/OpdsServerListActivity.h"
-#include "activities/reader/ReaderActivity.h"
-#include "activities/settings/SettingsActivity.h"
-#include "activities/util/FullScreenMessageActivity.h"
 #include "config.h"
-#include "opds/OpdsServerStore.h"
+
+// New refactored core system
+#include "core/Core.h"
+#include "core/StateMachine.h"
+#include "images/PapyrixLogo.h"
+#include "states/ErrorState.h"
+#include "states/FileListState.h"
+#include "states/HomeState.h"
+#include "states/ReaderState.h"
+#include "states/SettingsState.h"
+#include "states/SleepState.h"
+#include "states/StartupState.h"
+#include "ui/views/BootSleepViews.h"
 
 #define SPI_FQ 40000000
 // Display SPI pins (custom pins for XteinkX4, not hardware SPI defaults)
@@ -62,7 +63,25 @@ EInkDisplay einkDisplay(EPD_SCLK, EPD_MOSI, EPD_CS, EPD_DC, EPD_RST, EPD_BUSY);
 InputManager inputManager;
 MappedInputManager mappedInputManager(inputManager);
 GfxRenderer renderer(einkDisplay);
-Activity* currentActivity;
+
+// Extern references for driver wrappers
+EInkDisplay& display = einkDisplay;
+MappedInputManager& mappedInput = mappedInputManager;
+
+// Core system
+namespace papyrix {
+Core core;
+}
+
+// State instances (pre-allocated, no heap per transition)
+static papyrix::StartupState startupState;
+static papyrix::HomeState homeState(renderer);
+static papyrix::FileListState fileListState(renderer);
+static papyrix::ReaderState readerState(renderer);
+static papyrix::SettingsState settingsState(renderer);
+static papyrix::SleepState sleepState(renderer);
+static papyrix::ErrorState errorState(renderer);
+static papyrix::StateMachine stateMachine;
 
 RTC_DATA_ATTR uint16_t rtcPowerButtonDurationMs = 400;
 
@@ -92,23 +111,6 @@ EpdFontFamily smallFontFamily(&smallFont);
 EpdFont ui12Font(&ui_12);
 EpdFont uiBold12Font(&ui_bold_12);
 EpdFontFamily uiFontFamily(&ui12Font, &uiBold12Font);
-
-void exitActivity() {
-  if (currentActivity) {
-    currentActivity->onExit();
-    delete currentActivity;
-    currentActivity = nullptr;
-  }
-}
-
-void enterNewActivity(Activity* activity) {
-  if (!activity) {
-    Serial.printf("[%lu] [ERR] enterNewActivity called with null activity\n", millis());
-    return;
-  }
-  currentActivity = activity;
-  currentActivity->onEnter();
-}
 
 bool isUsbConnected() { return digitalRead(UART0_RXD) == HIGH; }
 
@@ -168,89 +170,6 @@ void waitForPowerRelease() {
   }
 }
 
-// Enter deep sleep mode
-void enterDeepSleep() {
-  exitActivity();
-  enterNewActivity(new SleepActivity(renderer, mappedInputManager));
-
-  rtcPowerButtonDurationMs = SETTINGS.getPowerButtonDuration();
-
-  einkDisplay.deepSleep();
-  Serial.printf("[%lu] [   ] Entering deep sleep.\n", millis());
-  esp_deep_sleep_enable_gpio_wakeup(1ULL << InputManager::POWER_BUTTON_PIN, ESP_GPIO_WAKEUP_GPIO_LOW);
-  // Ensure that the power button has been released to avoid immediately turning back on if you're holding it
-  waitForPowerRelease();
-  // Hold all GPIO pins at their current state during deep sleep to keep the X4's LDO enabled.
-  // Without this, floating pins can cause increased power draw during sleep.
-  gpio_deep_sleep_hold_en();
-  esp_deep_sleep_start();
-}
-
-void onGoHome();
-void onGoToReader(const std::string& initialEpubPath) {
-  exitActivity();
-  enterNewActivity(new ReaderActivity(renderer, mappedInputManager, initialEpubPath, onGoHome));
-}
-void onGoToReaderHome() { onGoToReader(std::string()); }
-void onContinueReading() { onGoToReader(APP_STATE.openEpubPath); }
-
-void onGoToSettingsFileTransfer();
-void onGoToFileTransfer() {
-  exitActivity();
-  enterNewActivity(new CrossPointWebServerActivity(renderer, mappedInputManager, onGoToSettingsFileTransfer));
-}
-
-void onGoToSettingsCalibreWireless();
-void onGoToCalibreWireless() {
-  exitActivity();
-  enterNewActivity(new CalibreConnectionActivity(renderer, mappedInputManager, onGoToSettingsCalibreWireless));
-}
-
-void onGoToSettings();
-void onGoToSettingsNetLibrary();
-void onGoToOpdsServers();
-void onOpdsServerSelected(const OpdsServerConfig& server) {
-  exitActivity();
-  enterNewActivity(new OpdsBookBrowserActivity(renderer, mappedInputManager, server,
-                                               onGoToOpdsServers  // onGoBack
-                                               ));
-}
-
-void onGoToOpdsServers() {
-  exitActivity();
-  enterNewActivity(
-      new OpdsServerListActivity(renderer, mappedInputManager, onGoToSettingsNetLibrary, onOpdsServerSelected));
-}
-
-void onGoToSettings() {
-  exitActivity();
-  enterNewActivity(new SettingsActivity(renderer, mappedInputManager, onGoHome, onGoToFileTransfer, onGoToOpdsServers,
-                                        onGoToCalibreWireless));
-}
-
-void onGoToSettingsNetLibrary() {
-  exitActivity();
-  enterNewActivity(new SettingsActivity(renderer, mappedInputManager, onGoHome, onGoToFileTransfer, onGoToOpdsServers,
-                                        onGoToCalibreWireless));
-}
-
-void onGoToSettingsCalibreWireless() {
-  exitActivity();
-  enterNewActivity(new SettingsActivity(renderer, mappedInputManager, onGoHome, onGoToFileTransfer, onGoToOpdsServers,
-                                        onGoToCalibreWireless));
-}
-
-void onGoToSettingsFileTransfer() {
-  exitActivity();
-  enterNewActivity(new SettingsActivity(renderer, mappedInputManager, onGoHome, onGoToFileTransfer, onGoToOpdsServers,
-                                        onGoToCalibreWireless));
-}
-
-void onGoHome() {
-  exitActivity();
-  enterNewActivity(new HomeActivity(renderer, mappedInputManager, onContinueReading, onGoToReaderHome, onGoToSettings));
-}
-
 void setupDisplayAndFonts() {
   einkDisplay.begin();
   Serial.printf("[%lu] [   ] Display initialized\n", millis());
@@ -283,18 +202,18 @@ void applyThemeFonts() {
   int* targetFontId = nullptr;
   int builtinFontId = 0;
 
-  switch (SETTINGS.fontSize) {
-    case CrossPointSettings::FONT_MEDIUM:
+  switch (papyrix::core.settings.fontSize) {
+    case papyrix::Settings::FontMedium:
       fontFamilyName = theme.readerFontFamilyMedium;
       targetFontId = &theme.readerFontIdMedium;
       builtinFontId = READER_FONT_ID_MEDIUM;
       break;
-    case CrossPointSettings::FONT_LARGE:
+    case papyrix::Settings::FontLarge:
       fontFamilyName = theme.readerFontFamilyLarge;
       targetFontId = &theme.readerFontIdLarge;
       builtinFontId = READER_FONT_ID_LARGE;
       break;
-    default:  // FONT_SMALL
+    default:  // FontSmall
       fontFamilyName = theme.readerFontFamilySmall;
       targetFontId = &theme.readerFontId;
       builtinFontId = READER_FONT_ID;
@@ -311,6 +230,12 @@ void applyThemeFonts() {
       Serial.printf("[%lu] [FONT] Reader font: %s (ID: %d)\n", millis(), fontFamilyName, customFontId);
     }
   }
+}
+
+void showErrorScreen(const char* message) {
+  renderer.clearScreen(false);
+  renderer.drawCenteredText(UI_FONT_ID, 100, message, true, BOLD);
+  renderer.displayBuffer();
 }
 
 void setup() {
@@ -340,46 +265,91 @@ void setup() {
   SPI.begin(EPD_SCLK, SD_SPI_MISO, EPD_MOSI, EPD_CS);
 
   // SD Card Initialization
-  // We need 6 open files concurrently when parsing a new chapter
   if (!SdMan.begin()) {
     Serial.printf("[%lu] [   ] SD card initialization failed\n", millis());
     setupDisplayAndFonts();
-    exitActivity();
-    enterNewActivity(new FullScreenMessageActivity(renderer, mappedInputManager, "SD card error", BOLD));
+    showErrorScreen("SD card error");
     return;
   }
 
-  SETTINGS.loadFromFile();
-  rtcPowerButtonDurationMs = SETTINGS.getPowerButtonDuration();
+  papyrix::core.settings.loadFromFile();
+  rtcPowerButtonDurationMs = papyrix::core.settings.getPowerButtonDuration();
 
   // Initialize internal flash filesystem for font storage
-  if (!LittleFS.begin(true)) {
-    Serial.printf("[%lu] [FS] LittleFS mount failed\n", millis());
+  if (!LittleFS.begin(false)) {
+    Serial.printf("[%lu] [FS] LittleFS mount failed, attempting format\n", millis());
+    if (!LittleFS.format() || !LittleFS.begin(false)) {
+      Serial.printf("[%lu] [FS] LittleFS recovery failed\n", millis());
+      showErrorScreen("Internal storage error");
+      return;
+    }
+    Serial.printf("[%lu] [FS] LittleFS formatted and mounted\n", millis());
   } else {
     Serial.printf("[%lu] [FS] LittleFS mounted\n", millis());
   }
 
   // Initialize theme and font managers
   FONT_MANAGER.init(renderer);
-  THEME_MANAGER.loadTheme(SETTINGS.themeName);
+  THEME_MANAGER.loadTheme(papyrix::core.settings.themeName);
   THEME_MANAGER.createDefaultThemeFiles();  // Create template files if missing
   Serial.printf("[%lu] [   ] Theme loaded: %s\n", millis(), THEME_MANAGER.currentThemeName());
 
   setupDisplayAndFonts();
   applyThemeFonts();
 
-  exitActivity();
-  enterNewActivity(new BootActivity(renderer, mappedInputManager));
+  // Show boot splash (after fonts ready - matches old BootActivity sequence)
+  {
+    ui::BootView bootView;
+    bootView.setLogo(PapyrixLogo, 128, 128);
+    bootView.setVersion(PAPYRIX_VERSION);
+    bootView.setStatus("BOOTING");
+    ui::render(renderer, THEME, bootView);
+  }
 
-  APP_STATE.loadFromFile();
-  if (APP_STATE.openEpubPath.empty() || SETTINGS.startupBehavior == CrossPointSettings::STARTUP_HOME) {
-    onGoHome();
+  // Register all states
+  stateMachine.registerState(&startupState);
+  stateMachine.registerState(&homeState);
+  stateMachine.registerState(&fileListState);
+  stateMachine.registerState(&readerState);
+  stateMachine.registerState(&settingsState);
+  stateMachine.registerState(&sleepState);
+  stateMachine.registerState(&errorState);
+
+  // Initialize core and start state machine
+  auto result = papyrix::core.init();
+  if (!result.ok()) {
+    Serial.printf("[%lu] [CORE] Init failed: %s\n", millis(), papyrix::errorToString(result.err));
+    showErrorScreen("Core init failed");
   } else {
-    // Clear app state to avoid getting into a boot loop if the epub doesn't load
-    const auto path = APP_STATE.openEpubPath;
-    APP_STATE.openEpubPath = "";
-    APP_STATE.saveToFile();
-    onGoToReader(path);
+    Serial.printf("[%lu] [CORE] State machine starting\n", millis());
+    // Connect MappedInputManager to settings for side button layout
+    mappedInputManager.setSettings(&papyrix::core.settings);
+
+    // Determine initial state based on startup behavior setting
+    papyrix::StateId initialState = papyrix::StateId::Home;
+
+    if (papyrix::core.settings.startupBehavior == papyrix::Settings::StartupLastDocument &&
+        papyrix::core.settings.lastBookPath[0] != '\0' && SdMan.exists(papyrix::core.settings.lastBookPath)) {
+      // Copy path to shared buffer for ReaderState to consume
+      strncpy(papyrix::core.buf.path, papyrix::core.settings.lastBookPath, sizeof(papyrix::core.buf.path) - 1);
+      papyrix::core.buf.path[sizeof(papyrix::core.buf.path) - 1] = '\0';
+
+      // Clear lastBookPath before attempting to open - prevents boot loop if file fails to load.
+      // ReaderState will re-save the path after successfully opening the content.
+      papyrix::core.settings.lastBookPath[0] = '\0';
+      papyrix::core.settings.saveToFile();
+
+      initialState = papyrix::StateId::Reader;
+      Serial.printf("[%lu] [CORE] Starting with last document: %s\n", millis(), papyrix::core.buf.path);
+    }
+
+    stateMachine.init(papyrix::core, initialState);
+
+    // CRITICAL: Force initial render immediately after state machine init
+    // This matches the old behavior where the next activity's onEnter() rendered immediately
+    // Without this, the first render is deferred to the loop, which can cause display issues
+    Serial.printf("[%lu] [CORE] Forcing initial render\n", millis());
+    stateMachine.update(papyrix::core);
   }
 
   // Ensure we're not still holding the power button before leaving setup
@@ -399,32 +369,27 @@ void loop() {
     lastMemPrint = millis();
   }
 
-  // Check for any user activity (button press or release) or active background work
-  static unsigned long lastActivityTime = millis();
-  if (inputManager.wasAnyPressed() || inputManager.wasAnyReleased() ||
-      (currentActivity && currentActivity->preventAutoSleep())) {
-    lastActivityTime = millis();  // Reset inactivity timer
-  }
+  // Poll input and push events to queue
+  papyrix::core.input.poll();
 
-  const auto autoSleepTimeout = SETTINGS.getAutoSleepTimeoutMs();
-  if (autoSleepTimeout > 0 && millis() - lastActivityTime >= autoSleepTimeout) {
-    Serial.printf("[%lu] [SLP] Auto-sleep triggered after %lu ms of inactivity\n", millis(), autoSleepTimeout);
-    enterDeepSleep();
-    // This should never be hit as `enterDeepSleep` calls esp_deep_sleep_start
+  // Auto-sleep after inactivity
+  const auto autoSleepTimeout = papyrix::core.settings.getAutoSleepTimeoutMs();
+  if (autoSleepTimeout > 0 && papyrix::core.input.idleTimeMs() >= autoSleepTimeout) {
+    Serial.printf("[%lu] [SLP] Auto-sleep after %lu ms idle\n", millis(), autoSleepTimeout);
+    stateMachine.init(papyrix::core, papyrix::StateId::Sleep);
     return;
   }
 
+  // Check for power button long press -> sleep
   if (inputManager.isPressed(InputManager::BTN_POWER) &&
-      inputManager.getHeldTime() > SETTINGS.getPowerButtonDuration()) {
-    enterDeepSleep();
-    // This should never be hit as `enterDeepSleep` calls esp_deep_sleep_start
+      inputManager.getHeldTime() > papyrix::core.settings.getPowerButtonDuration()) {
+    stateMachine.init(papyrix::core, papyrix::StateId::Sleep);
     return;
   }
 
+  // Update state machine (handles transitions and rendering)
   const unsigned long activityStartTime = millis();
-  if (currentActivity) {
-    currentActivity->loop();
-  }
+  stateMachine.update(papyrix::core);
   const unsigned long activityDuration = millis() - activityStartTime;
 
   const unsigned long loopDuration = millis() - loopStartTime;
@@ -437,11 +402,5 @@ void loop() {
   }
 
   // Add delay at the end of the loop to prevent tight spinning
-  // When an activity requests skip loop delay (e.g., webserver running), use yield() for faster response
-  // Otherwise, use longer delay to save power
-  if (currentActivity && currentActivity->skipLoopDelay()) {
-    yield();  // Give FreeRTOS a chance to run tasks, but return immediately
-  } else {
-    delay(10);  // Normal delay when no activity requires fast response
-  }
+  delay(10);
 }

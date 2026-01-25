@@ -137,6 +137,12 @@ BmpReaderError Bitmap::parseHeaders() {
     return BmpReaderError::SeekPixelDataFailed;
   }
 
+  // Clean up existing ditherers (safe if nullptr)
+  delete atkinsonDitherer;
+  atkinsonDitherer = nullptr;
+  delete fsDitherer;
+  fsDitherer = nullptr;
+
   // Create ditherer if enabled (only for 2-bit output)
   // Use OUTPUT dimensions for dithering (after prescaling)
   if (bpp > 2 && dithering) {

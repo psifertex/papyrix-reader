@@ -4,6 +4,11 @@
 
 void GfxRenderer::insertFont(const int fontId, EpdFontFamily font) { fontMap.insert({fontId, font}); }
 
+void GfxRenderer::removeFont(const int fontId) {
+  fontMap.erase(fontId);
+  wordWidthCache.clear();
+}
+
 void GfxRenderer::rotateCoordinates(const int x, const int y, int* rotatedX, int* rotatedY) const {
   switch (orientation) {
     case Portrait: {
@@ -83,6 +88,12 @@ int GfxRenderer::getTextWidth(const int fontId, const char* text, const EpdFontF
 
   int w = 0, h = 0;
   fontMap.at(fontId).getTextDimensions(text, &w, &h, style);
+
+  // Limit cache size to prevent heap fragmentation
+  if (wordWidthCache.size() >= MAX_WIDTH_CACHE_SIZE) {
+    wordWidthCache.clear();
+  }
+
   wordWidthCache[key] = static_cast<int16_t>(w);
   return w;
 }
@@ -180,16 +191,19 @@ void GfxRenderer::drawBitmap(const Bitmap& bitmap, const int x, const int y, con
     isScaled = true;
   }
 
-  // Calculate output row size (2 bits per pixel, packed into bytes)
-  // IMPORTANT: Use int, not uint8_t, to avoid overflow for images > 1020 pixels wide
-  const int outputRowSize = (bitmap.getWidth() + 3) / 4;
-  auto* outputRow = static_cast<uint8_t*>(malloc(outputRowSize));
-  auto* rowBytes = static_cast<uint8_t*>(malloc(bitmap.getRowBytes()));
+  // Use pre-allocated row buffers to avoid per-call heap allocation
+  // Verify bitmap fits within our pre-allocated buffer sizes
+  const size_t outputRowSize = static_cast<size_t>((bitmap.getWidth() + 3) / 4);
+  const size_t rowBytesSize = static_cast<size_t>(bitmap.getRowBytes());
 
-  if (!outputRow || !rowBytes) {
-    Serial.printf("[%lu] [GFX] !! Failed to allocate BMP row buffers\n", millis());
-    free(outputRow);
-    free(rowBytes);
+  if (!bitmapOutputRow_ || !bitmapRowBytes_) {
+    Serial.printf("[%lu] [GFX] !! Bitmap row buffers not allocated\n", millis());
+    return;
+  }
+
+  if (outputRowSize > BITMAP_OUTPUT_ROW_SIZE || rowBytesSize > BITMAP_ROW_BYTES_SIZE) {
+    Serial.printf("[%lu] [GFX] !! Bitmap too large for pre-allocated buffers (%zu > %zu or %zu > %zu)\n", millis(),
+                  outputRowSize, BITMAP_OUTPUT_ROW_SIZE, rowBytesSize, BITMAP_ROW_BYTES_SIZE);
     return;
   }
 
@@ -204,10 +218,8 @@ void GfxRenderer::drawBitmap(const Bitmap& bitmap, const int x, const int y, con
       break;
     }
 
-    if (bitmap.readRow(outputRow, rowBytes, bmpY) != BmpReaderError::Ok) {
+    if (bitmap.readRow(bitmapOutputRow_, bitmapRowBytes_, bmpY) != BmpReaderError::Ok) {
       Serial.printf("[%lu] [GFX] Failed to read row %d from bitmap\n", millis(), bmpY);
-      free(outputRow);
-      free(rowBytes);
       return;
     }
 
@@ -220,7 +232,7 @@ void GfxRenderer::drawBitmap(const Bitmap& bitmap, const int x, const int y, con
         break;
       }
 
-      const uint8_t val = outputRow[bmpX / 4] >> (6 - ((bmpX * 2) % 8)) & 0x3;
+      const uint8_t val = bitmapOutputRow_[bmpX / 4] >> (6 - ((bmpX * 2) % 8)) & 0x3;
 
       if (renderMode == BW && val < 3) {
         drawPixel(screenX, screenY);
@@ -231,9 +243,6 @@ void GfxRenderer::drawBitmap(const Bitmap& bitmap, const int x, const int y, con
       }
     }
   }
-
-  free(outputRow);
-  free(rowBytes);
 }
 
 void GfxRenderer::clearScreen(const uint8_t color) const { einkDisplay.clearScreen(color); }
@@ -701,11 +710,18 @@ void GfxRenderer::renderChar(const EpdFontFamily& fontFamily, const uint32_t cp,
   bitmap = &fontFamily.getData(style)->bitmap[offset];
 
   if (bitmap != nullptr) {
+    const int screenHeight = getScreenHeight();
+    const int screenWidth = getScreenWidth();
+
     for (int glyphY = 0; glyphY < height; glyphY++) {
       const int screenY = *y - glyph->top + glyphY;
+      if (screenY < 0 || screenY >= screenHeight) continue;
+
       for (int glyphX = 0; glyphX < width; glyphX++) {
-        const int pixelPosition = glyphY * width + glyphX;
         const int screenX = *x + left + glyphX;
+        if (screenX < 0 || screenX >= screenWidth) continue;
+
+        const int pixelPosition = glyphY * width + glyphX;
 
         if (is2Bit) {
           const uint8_t byte = bitmap[pixelPosition / 4];
@@ -767,5 +783,26 @@ void GfxRenderer::getOrientedViewableTRBL(int* outTop, int* outRight, int* outBo
       *outBottom = VIEWABLE_MARGIN_LEFT;
       *outLeft = VIEWABLE_MARGIN_TOP;
       break;
+  }
+}
+
+void GfxRenderer::allocateBitmapRowBuffers() {
+  bitmapOutputRow_ = static_cast<uint8_t*>(malloc(BITMAP_OUTPUT_ROW_SIZE));
+  bitmapRowBytes_ = static_cast<uint8_t*>(malloc(BITMAP_ROW_BYTES_SIZE));
+
+  if (!bitmapOutputRow_ || !bitmapRowBytes_) {
+    Serial.printf("[%lu] [GFX] !! Failed to allocate bitmap row buffers\n", millis());
+    freeBitmapRowBuffers();
+  }
+}
+
+void GfxRenderer::freeBitmapRowBuffers() {
+  if (bitmapOutputRow_) {
+    free(bitmapOutputRow_);
+    bitmapOutputRow_ = nullptr;
+  }
+  if (bitmapRowBytes_) {
+    free(bitmapRowBytes_);
+    bitmapRowBytes_ = nullptr;
   }
 }

@@ -2,6 +2,10 @@
 
 #include <InputManager.h>
 
+namespace papyrix {
+struct Settings;
+}
+
 class MappedInputManager {
  public:
   enum class Button { Back, Confirm, Left, Right, Up, Down, Power, PageBack, PageForward };
@@ -13,7 +17,9 @@ class MappedInputManager {
     const char* btn4;
   };
 
-  explicit MappedInputManager(InputManager& inputManager) : inputManager(inputManager) {}
+  explicit MappedInputManager(InputManager& inputManager) : inputManager(inputManager), settings_(nullptr) {}
+
+  void setSettings(papyrix::Settings* settings) { settings_ = settings; }
 
   bool wasPressed(Button button) const;
   bool wasReleased(Button button) const;
@@ -25,5 +31,6 @@ class MappedInputManager {
 
  private:
   InputManager& inputManager;
+  papyrix::Settings* settings_;
   decltype(InputManager::BTN_BACK) mapButton(Button button) const;
 };

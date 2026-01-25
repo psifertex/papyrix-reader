@@ -1,11 +1,12 @@
 #include "MappedInputManager.h"
 
-#include "CrossPointSettings.h"
 #include "ThemeManager.h"
+#include "core/PapyrixSettings.h"
 
 decltype(InputManager::BTN_BACK) MappedInputManager::mapButton(const Button button) const {
   const auto frontLayout = static_cast<FrontButtonLayout>(THEME.frontButtonLayout);
-  const auto sideLayout = static_cast<CrossPointSettings::SIDE_BUTTON_LAYOUT>(SETTINGS.sideButtonLayout);
+  const auto sideLayout = settings_ ? static_cast<papyrix::Settings::SideButtonLayout>(settings_->sideButtonLayout)
+                                    : papyrix::Settings::PrevNext;
 
   switch (button) {
     case Button::Back:
@@ -48,17 +49,17 @@ decltype(InputManager::BTN_BACK) MappedInputManager::mapButton(const Button butt
       return InputManager::BTN_POWER;
     case Button::PageBack:
       switch (sideLayout) {
-        case CrossPointSettings::NEXT_PREV:
+        case papyrix::Settings::NextPrev:
           return InputManager::BTN_DOWN;
-        case CrossPointSettings::PREV_NEXT:
+        case papyrix::Settings::PrevNext:
         default:
           return InputManager::BTN_UP;
       }
     case Button::PageForward:
       switch (sideLayout) {
-        case CrossPointSettings::NEXT_PREV:
+        case papyrix::Settings::NextPrev:
           return InputManager::BTN_UP;
-        case CrossPointSettings::PREV_NEXT:
+        case papyrix::Settings::PrevNext:
         default:
           return InputManager::BTN_DOWN;
       }

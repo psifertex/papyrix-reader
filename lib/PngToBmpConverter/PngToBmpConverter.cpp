@@ -214,6 +214,10 @@ void pngInitCallback(pngle_t* pngle, uint32_t w, uint32_t h) {
 
   if (!ctx->srcRowBuffer || !ctx->outRowBuffer) {
     Serial.printf("[%lu] [PNG] Failed to allocate row buffers\n", millis());
+    free(ctx->srcRowBuffer);  // safe if nullptr
+    free(ctx->outRowBuffer);  // safe if nullptr
+    ctx->srcRowBuffer = nullptr;
+    ctx->outRowBuffer = nullptr;
     return;
   }
 

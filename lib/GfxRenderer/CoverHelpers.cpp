@@ -1,17 +1,19 @@
 #include "CoverHelpers.h"
 
 #include <Bitmap.h>
-#include <CrossPointSettings.h>
+#include <BitmapHelpers.h>
 #include <GfxRenderer.h>
 #include <HardwareSerial.h>
 #include <JpegToBmpConverter.h>
 #include <PngToBmpConverter.h>
 #include <SDCardManager.h>
 
+#include "../../src/config.h"
+
 namespace CoverHelpers {
 
 bool renderCoverFromBmp(GfxRenderer& renderer, const std::string& bmpPath, int marginTop, int marginRight,
-                        int marginBottom, int marginLeft, int& pagesUntilFullRefresh) {
+                        int marginBottom, int marginLeft, int& pagesUntilFullRefresh, int pagesPerRefreshValue) {
   FsFile coverFile;
   if (!SdMan.openFileForRead("CVR", bmpPath, coverFile)) {
     Serial.printf("[%lu] [CVR] Failed to open cover BMP: %s\n", millis(), bmpPath.c_str());
@@ -38,16 +40,14 @@ bool renderCoverFromBmp(GfxRenderer& renderer, const std::string& bmpPath, int m
   // Display with refresh logic
   if (pagesUntilFullRefresh <= 1) {
     renderer.displayBuffer(EInkDisplay::HALF_REFRESH);
-    pagesUntilFullRefresh = SETTINGS.getPagesPerRefreshValue();
+    pagesUntilFullRefresh = pagesPerRefreshValue;
   } else {
     renderer.displayBuffer();
     pagesUntilFullRefresh--;
   }
 
-  // Grayscale rendering (if bitmap supports it)
-  if (bitmap.hasGreyscale()) {
-    renderer.storeBwBuffer();
-
+  // Grayscale rendering (if bitmap supports it and buffer can be stored)
+  if (bitmap.hasGreyscale() && renderer.storeBwBuffer()) {
     bitmap.rewindToData();
     renderer.clearScreen(0x00);
     renderer.setRenderMode(GfxRenderer::GRAYSCALE_LSB);
@@ -95,7 +95,8 @@ std::string findCoverImage(const std::string& dirPath, const std::string& baseNa
   return "";
 }
 
-bool convertImageToBmp(const std::string& inputPath, const std::string& outputPath, const char* logTag) {
+bool convertImageToBmp(const std::string& inputPath, const std::string& outputPath, const char* logTag,
+                       bool use1BitDithering) {
   // Check if it's a BMP file (just copy)
   if (FsHelpers::isBmpFile(inputPath)) {
     FsFile src, dst;
@@ -166,9 +167,8 @@ bool convertImageToBmp(const std::string& inputPath, const std::string& outputPa
     return false;
   }
 
-  const bool use1Bit = SETTINGS.coverDithering != 0;
-  const bool success = use1Bit ? JpegToBmpConverter::jpegFileTo1BitBmpStream(jpegFile, bmpFile)
-                               : JpegToBmpConverter::jpegFileToBmpStream(jpegFile, bmpFile);
+  const bool success = use1BitDithering ? JpegToBmpConverter::jpegFileTo1BitBmpStream(jpegFile, bmpFile)
+                                        : JpegToBmpConverter::jpegFileToBmpStream(jpegFile, bmpFile);
 
   jpegFile.close();
   bmpFile.close();
@@ -181,6 +181,24 @@ bool convertImageToBmp(const std::string& inputPath, const std::string& outputPa
   }
 
   return success;
+}
+
+bool generateThumbFromCover(const std::string& coverBmpPath, const std::string& thumbBmpPath, const char* logTag) {
+  if (SdMan.exists(thumbBmpPath.c_str())) return true;
+  if (!SdMan.exists(coverBmpPath.c_str())) return false;
+
+  const auto thumbTempPath = thumbBmpPath + ".tmp";
+  if (bmpTo1BitBmpScaled(coverBmpPath.c_str(), thumbTempPath.c_str(), THUMB_WIDTH, THUMB_HEIGHT)) {
+    FsFile tempFile = SdMan.open(thumbTempPath.c_str(), O_RDWR);
+    if (tempFile) {
+      tempFile.rename(thumbBmpPath.c_str());
+      tempFile.close();
+      Serial.printf("[%lu] [%s] Generated thumbnail\n", millis(), logTag);
+      return true;
+    }
+  }
+  SdMan.remove(thumbTempPath.c_str());
+  return false;
 }
 
 }  // namespace CoverHelpers

@@ -33,8 +33,19 @@ class GfxRenderer {
   uint8_t* bwBufferChunks[BW_BUFFER_NUM_CHUNKS] = {nullptr};
   std::map<int, EpdFontFamily> fontMap;
 
+  // Pre-allocated row buffers for bitmap rendering (reduces heap fragmentation)
+  // Sized for max screen dimension (800 pixels): outputRow = 800/4 = 200 bytes, rowBytes = 800*3 = 2400 bytes (24bpp)
+  static constexpr size_t BITMAP_OUTPUT_ROW_SIZE = (EInkDisplay::DISPLAY_WIDTH + 3) / 4;
+  static constexpr size_t BITMAP_ROW_BYTES_SIZE = EInkDisplay::DISPLAY_WIDTH * 3;  // 24-bit max
+  uint8_t* bitmapOutputRow_ = nullptr;
+  uint8_t* bitmapRowBytes_ = nullptr;
+  void allocateBitmapRowBuffers();
+  void freeBitmapRowBuffers();
+
   // Word width cache for performance optimization during EPUB section creation.
   // Key: FNV-1a hash of (fontId, text, style). Value: measured width in pixels.
+  // Limited to MAX_WIDTH_CACHE_SIZE entries to prevent heap fragmentation.
+  static constexpr size_t MAX_WIDTH_CACHE_SIZE = 512;
   mutable std::unordered_map<uint64_t, int16_t> wordWidthCache;
 
   uint64_t makeWidthCacheKey(int fontId, const char* text, EpdFontFamily::Style style) const {
@@ -59,8 +70,10 @@ class GfxRenderer {
   void rotateCoordinates(int x, int y, int* rotatedX, int* rotatedY) const;
 
  public:
-  explicit GfxRenderer(EInkDisplay& einkDisplay) : einkDisplay(einkDisplay), renderMode(BW), orientation(Portrait) {}
-  ~GfxRenderer() = default;
+  explicit GfxRenderer(EInkDisplay& einkDisplay) : einkDisplay(einkDisplay), renderMode(BW), orientation(Portrait) {
+    allocateBitmapRowBuffers();
+  }
+  ~GfxRenderer() { freeBitmapRowBuffers(); }
 
   static constexpr int VIEWABLE_MARGIN_TOP = 9;
   static constexpr int VIEWABLE_MARGIN_RIGHT = 3;
@@ -69,6 +82,7 @@ class GfxRenderer {
 
   // Setup
   void insertFont(int fontId, EpdFontFamily font);
+  void removeFont(int fontId);
   void clearWidthCache() { wordWidthCache.clear(); }
 
   // Orientation control (affects logical width/height and coordinate transforms)

@@ -41,6 +41,8 @@ struct Theme {
   uint8_t screenMarginSide;
   uint8_t itemHeight;
   uint8_t itemSpacing;
+  uint8_t itemPaddingX;      // Horizontal padding inside items
+  uint8_t itemValuePadding;  // Right padding for values
 
   // Font IDs
   int uiFontId;
@@ -75,6 +77,8 @@ inline Theme getBuiltinLightTheme() {
   theme.screenMarginSide = 3;
   theme.itemHeight = 30;
   theme.itemSpacing = 0;
+  theme.itemPaddingX = 8;
+  theme.itemValuePadding = 20;
   theme.uiFontId = UI_FONT_ID;
   theme.smallFontId = SMALL_FONT_ID;
   theme.readerFontId = READER_FONT_ID;
@@ -104,6 +108,8 @@ inline Theme getBuiltinDarkTheme() {
   theme.screenMarginSide = 3;
   theme.itemHeight = 30;
   theme.itemSpacing = 0;
+  theme.itemPaddingX = 8;
+  theme.itemValuePadding = 20;
   theme.uiFontId = UI_FONT_ID;
   theme.smallFontId = SMALL_FONT_ID;
   theme.readerFontId = READER_FONT_ID;

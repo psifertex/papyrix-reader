@@ -1,0 +1,1027 @@
+#include "ReaderState.h"
+
+#include <Arduino.h>
+#include <CoverHelpers.h>
+#include <Epub/Page.h>
+#include <EpubChapterParser.h>
+#include <GfxRenderer.h>
+#include <MarkdownParser.h>
+#include <PageCache.h>
+#include <PlainTextParser.h>
+
+#include <cstring>
+
+#include "../Battery.h"
+#include "../config.h"
+#include "../content/ProgressManager.h"
+#include "../content/ReaderNavigation.h"
+#include "../core/Core.h"
+#include "../ui/Elements.h"
+#include "ThemeManager.h"
+
+namespace papyrix {
+
+namespace {
+constexpr int horizontalPadding = 5;
+constexpr int statusBarMargin = 19;
+}  // namespace
+
+ReaderState::ReaderState(GfxRenderer& renderer)
+    : renderer_(renderer),
+      xtcRenderer_(renderer),
+      currentPage_(0),
+      needsRender_(true),
+      contentLoaded_(false),
+      currentSpineIndex_(0),
+      currentSectionPage_(0),
+      pagesUntilFullRefresh_(1),
+      tocView_{},
+      cacheMutex_(xSemaphoreCreateMutex()) {
+  contentPath_[0] = '\0';
+}
+
+ReaderState::~ReaderState() {
+  stopBackgroundCaching();
+  if (cacheMutex_) {
+    vSemaphoreDelete(cacheMutex_);
+    cacheMutex_ = nullptr;
+  }
+}
+
+void ReaderState::setContentPath(const char* path) {
+  if (path) {
+    strncpy(contentPath_, path, sizeof(contentPath_) - 1);
+    contentPath_[sizeof(contentPath_) - 1] = '\0';
+  } else {
+    contentPath_[0] = '\0';
+  }
+}
+
+void ReaderState::enter(Core& core) {
+  // Free memory from other states before loading book
+  THEME_MANAGER.clearCache();
+  renderer_.clearWidthCache();
+
+  contentLoaded_ = false;
+  needsRender_ = true;
+  xSemaphoreTake(cacheMutex_, portMAX_DELAY);
+  pageCache_.reset();
+  xSemaphoreGive(cacheMutex_);
+  cacheTaskComplete_ = false;
+  currentSpineIndex_ = 0;
+  currentSectionPage_ = 0;  // Will be set to -1 after progress load if at start
+
+  // Read path from shared buffer if not already set
+  if (contentPath_[0] == '\0' && core.buf.path[0] != '\0') {
+    strncpy(contentPath_, core.buf.path, sizeof(contentPath_) - 1);
+    contentPath_[sizeof(contentPath_) - 1] = '\0';
+    core.buf.path[0] = '\0';
+  }
+
+  // Determine source state from navigation flag
+  sourceState_ = (core.buf.text[0] == 'F') ? StateId::FileList : StateId::Home;
+  core.buf.text[0] = '\0';  // Clear flag
+
+  Serial.printf("[READER] Entering with path: %s\n", contentPath_);
+
+  if (contentPath_[0] == '\0') {
+    Serial.println("[READER] No content path set");
+    return;
+  }
+
+  // Apply orientation setting to renderer
+  switch (core.settings.orientation) {
+    case Settings::Portrait:
+      renderer_.setOrientation(GfxRenderer::Orientation::Portrait);
+      break;
+    case Settings::LandscapeCW:
+      renderer_.setOrientation(GfxRenderer::Orientation::LandscapeClockwise);
+      break;
+    case Settings::Inverted:
+      renderer_.setOrientation(GfxRenderer::Orientation::PortraitInverted);
+      break;
+    case Settings::LandscapeCCW:
+      renderer_.setOrientation(GfxRenderer::Orientation::LandscapeCounterClockwise);
+      break;
+    default:
+      renderer_.setOrientation(GfxRenderer::Orientation::Portrait);
+      break;
+  }
+
+  // Open content using ContentHandle
+  auto result = core.content.open(contentPath_, PAPYRIX_CACHE_DIR);
+  if (!result.ok()) {
+    Serial.printf("[READER] Failed to open content: %s\n", errorToString(result.err));
+    // Store error message for ErrorState to display
+    snprintf(core.buf.text, sizeof(core.buf.text), "Cannot open file:\n%s", errorToString(result.err));
+    return;
+  }
+
+  contentLoaded_ = true;
+
+  // Save last book path to settings
+  strncpy(core.settings.lastBookPath, contentPath_, sizeof(core.settings.lastBookPath) - 1);
+  core.settings.lastBookPath[sizeof(core.settings.lastBookPath) - 1] = '\0';
+  core.settings.save(core.storage);
+
+  // Setup cache directories for all content types
+  switch (core.content.metadata().type) {
+    case ContentType::Epub: {
+      auto* provider = core.content.asEpub();
+      if (provider && provider->getEpub()) {
+        provider->getEpub()->setupCacheDir();
+      }
+      break;
+    }
+    case ContentType::Txt: {
+      auto* provider = core.content.asTxt();
+      if (provider && provider->getTxt()) {
+        provider->getTxt()->setupCacheDir();
+      }
+      break;
+    }
+    case ContentType::Markdown: {
+      auto* provider = core.content.asMarkdown();
+      if (provider && provider->getMarkdown()) {
+        provider->getMarkdown()->setupCacheDir();
+      }
+      break;
+    }
+    default:
+      break;
+  }
+
+  // Load saved progress
+  ContentType type = core.content.metadata().type;
+  auto progress = ProgressManager::load(core, core.content.cacheDir(), type);
+  progress = ProgressManager::validate(core, type, progress);
+  currentSpineIndex_ = progress.spineIndex;
+  currentSectionPage_ = progress.sectionPage;
+  currentPage_ = progress.flatPage;
+
+  // If at start of book and showImages enabled, begin at cover
+  if (currentSpineIndex_ == 0 && currentSectionPage_ == 0 && core.settings.showImages) {
+    currentSectionPage_ = -1;  // Cover page
+  }
+
+  // Initialize last rendered to loaded position (until first render)
+  lastRenderedSpineIndex_ = currentSpineIndex_;
+  lastRenderedSectionPage_ = currentSectionPage_;
+
+  Serial.printf("[READER] Loaded: %s\n", core.content.metadata().title);
+}
+
+void ReaderState::exit(Core& core) {
+  Serial.println("[READER] Exiting");
+
+  // Stop background caching task first
+  stopBackgroundCaching();
+
+  if (contentLoaded_) {
+    // Save progress at last rendered position (not current requested position)
+    ProgressManager::Progress progress;
+    // If on cover, save as (0, 0) - cover is implicit start
+    progress.spineIndex = (lastRenderedSectionPage_ == -1) ? 0 : lastRenderedSpineIndex_;
+    progress.sectionPage = (lastRenderedSectionPage_ == -1) ? 0 : lastRenderedSectionPage_;
+    progress.flatPage = currentPage_;
+    ProgressManager::save(core, core.content.cacheDir(), core.content.metadata().type, progress);
+
+    xSemaphoreTake(cacheMutex_, portMAX_DELAY);
+    pageCache_.reset();
+    xSemaphoreGive(cacheMutex_);
+    core.content.close();
+  }
+
+  contentLoaded_ = false;
+  contentPath_[0] = '\0';
+
+  // Reset orientation to Portrait for UI
+  renderer_.setOrientation(GfxRenderer::Orientation::Portrait);
+}
+
+StateTransition ReaderState::update(Core& core) {
+  if (!contentLoaded_) {
+    // If error message was set, show ErrorState; otherwise just go back to FileList
+    if (core.buf.text[0] != '\0') {
+      return StateTransition::to(StateId::Error);
+    }
+    return StateTransition::to(StateId::FileList);
+  }
+
+  Event e;
+  while (core.events.pop(e)) {
+    // Route input to TOC handler when in TOC mode
+    if (tocMode_) {
+      handleTocInput(core, e);
+      continue;
+    }
+
+    switch (e.type) {
+      case EventType::ButtonPress:
+        switch (e.button) {
+          case Button::Right:
+          case Button::Down:
+            navigateNext(core);
+            break;
+
+          case Button::Left:
+          case Button::Up:
+            navigatePrev(core);
+            break;
+
+          case Button::Center:
+            if (core.content.tocCount() > 0) {
+              enterTocMode(core);
+            }
+            break;
+          case Button::Back:
+            if (sourceState_ == StateId::FileList) {
+              core.buf.text[0] = 'R';  // Signal "returning" to FileList
+            }
+            return StateTransition::to(sourceState_);
+          case Button::Power:
+            break;
+        }
+        break;
+
+      default:
+        break;
+    }
+  }
+
+  return StateTransition::stay(StateId::Reader);
+}
+
+void ReaderState::render(Core& core) {
+  if (!needsRender_ || !contentLoaded_) {
+    return;
+  }
+
+  if (tocMode_) {
+    renderTocOverlay(core);
+  } else {
+    renderCurrentPage(core);
+    // Track last successfully rendered position for progress saving
+    lastRenderedSpineIndex_ = currentSpineIndex_;
+    lastRenderedSectionPage_ = currentSectionPage_;
+  }
+
+  needsRender_ = false;
+}
+
+void ReaderState::navigateNext(Core& core) {
+  // From cover (-1) -> first content page (0)
+  if (currentSpineIndex_ == 0 && currentSectionPage_ == -1) {
+    currentSectionPage_ = 0;
+    needsRender_ = true;
+    return;
+  }
+
+  ContentType type = core.content.metadata().type;
+  ReaderNavigation::Position pos;
+  pos.spineIndex = currentSpineIndex_;
+  pos.sectionPage = currentSectionPage_;
+  pos.flatPage = currentPage_;
+  xSemaphoreTake(cacheMutex_, portMAX_DELAY);
+  auto result = ReaderNavigation::next(type, pos, pageCache_.get(), core.content.pageCount());
+  xSemaphoreGive(cacheMutex_);
+  applyNavResult(result);
+}
+
+void ReaderState::navigatePrev(Core& core) {
+  // At first page of first chapter
+  if (currentSpineIndex_ == 0 && currentSectionPage_ == 0) {
+    // Only go to cover if it exists and images enabled
+    if (hasCover_ && core.settings.showImages) {
+      currentSectionPage_ = -1;
+      xSemaphoreTake(cacheMutex_, portMAX_DELAY);
+      pageCache_.reset();  // Don't need cache for cover
+      xSemaphoreGive(cacheMutex_);
+      needsRender_ = true;
+    }
+    return;  // At start of book either way
+  }
+
+  // Prevent going back from cover
+  if (currentSpineIndex_ == 0 && currentSectionPage_ == -1) {
+    return;  // Already at cover
+  }
+
+  ContentType type = core.content.metadata().type;
+  ReaderNavigation::Position pos;
+  pos.spineIndex = currentSpineIndex_;
+  pos.sectionPage = currentSectionPage_;
+  pos.flatPage = currentPage_;
+  xSemaphoreTake(cacheMutex_, portMAX_DELAY);
+  auto result = ReaderNavigation::prev(type, pos, pageCache_.get());
+  xSemaphoreGive(cacheMutex_);
+  applyNavResult(result);
+}
+
+void ReaderState::applyNavResult(const ReaderNavigation::NavResult& result) {
+  currentSpineIndex_ = result.position.spineIndex;
+  currentSectionPage_ = result.position.sectionPage;
+  currentPage_ = result.position.flatPage;
+  needsRender_ = result.needsRender;
+  if (result.needsCacheReset) {
+    stopBackgroundCaching();
+    xSemaphoreTake(cacheMutex_, portMAX_DELAY);
+    pageCache_.reset();
+    xSemaphoreGive(cacheMutex_);
+    cacheTaskComplete_ = false;
+  }
+}
+
+void ReaderState::renderCurrentPage(Core& core) {
+  ContentType type = core.content.metadata().type;
+  const Theme& theme = THEME_MANAGER.current();
+
+  // Always clear screen first (prevents previous content from showing through)
+  renderer_.clearScreen(theme.backgroundColor);
+
+  // Cover page: spineIndex=0, sectionPage=-1 (only when showImages enabled)
+  if (currentSpineIndex_ == 0 && currentSectionPage_ == -1) {
+    if (core.settings.showImages) {
+      if (renderCoverPage(core)) {
+        hasCover_ = true;
+        // Start background caching while user views cover
+        startBackgroundCaching(core);
+        core.display.markDirty();
+        return;
+      }
+      // No cover - skip to page 0
+      hasCover_ = false;
+      currentSectionPage_ = 0;
+      // Fall through to render page 0
+    } else {
+      currentSectionPage_ = 0;
+    }
+  }
+
+  switch (type) {
+    case ContentType::Epub:
+    case ContentType::Txt:
+    case ContentType::Markdown:
+      renderCachedPage(core);
+      break;
+    case ContentType::Xtc:
+      renderXtcPage(core);
+      break;
+    default:
+      break;
+  }
+
+  core.display.markDirty();
+}
+
+void ReaderState::renderCachedPage(Core& core) {
+  Theme& theme = THEME_MANAGER.mutableCurrent();
+  ContentType type = core.content.metadata().type;
+  const auto vp = getReaderViewport();
+
+  // Handle EPUB bounds
+  if (type == ContentType::Epub) {
+    auto* provider = core.content.asEpub();
+    if (!provider || !provider->getEpub()) return;
+
+    auto epub = provider->getEpubShared();
+    if (currentSpineIndex_ < 0) currentSpineIndex_ = 0;
+    if (currentSpineIndex_ >= static_cast<int>(epub->getSpineItemsCount())) {
+      renderer_.drawCenteredText(core.settings.getReaderFontId(theme), 300, "End of book", theme.primaryTextBlack,
+                                 BOLD);
+      renderer_.displayBuffer();
+      return;
+    }
+  }
+
+  // Create or load cache if needed
+  xSemaphoreTake(cacheMutex_, portMAX_DELAY);
+  bool cacheExists = (pageCache_ != nullptr);
+  xSemaphoreGive(cacheMutex_);
+
+  if (!cacheExists) {
+    // Check if background task completed
+    if (cacheTaskComplete_) {
+      Serial.println("[READER] Using cache from background task");
+    } else {
+      // Background task not done - show overlay and wait
+      renderer_.clearScreen(theme.backgroundColor);
+
+      // Show overlay box (don't clear entire screen)
+      constexpr int boxMargin = 20;
+      const int fontId = core.settings.getReaderFontId(theme);
+      const int textWidth = renderer_.getTextWidth(fontId, "Indexing...");
+      const int boxWidth = textWidth + boxMargin * 2;
+      const int boxHeight = renderer_.getLineHeight(fontId) + boxMargin * 2;
+      const int boxX = (renderer_.getScreenWidth() - boxWidth) / 2;
+      constexpr int boxY = 50;
+
+      renderer_.fillRect(boxX, boxY, boxWidth, boxHeight, !theme.primaryTextBlack);
+      renderer_.drawText(fontId, boxX + boxMargin, boxY + boxMargin, "Indexing...", theme.primaryTextBlack);
+      renderer_.drawRect(boxX + 5, boxY + 5, boxWidth - 10, boxHeight - 10, theme.primaryTextBlack);
+      renderer_.displayBuffer();
+
+      createOrExtendCache(core);
+
+      // Clear overlay
+      renderer_.clearScreen(theme.backgroundColor);
+    }
+
+    // Clamp page number (handle negative values and out-of-bounds)
+    xSemaphoreTake(cacheMutex_, portMAX_DELAY);
+    if (pageCache_) {
+      const int cachedPages = static_cast<int>(pageCache_->pageCount());
+      if (currentSectionPage_ < 0) {
+        currentSectionPage_ = 0;
+      } else if (currentSectionPage_ >= cachedPages) {
+        currentSectionPage_ = cachedPages > 0 ? cachedPages - 1 : 0;
+      }
+    }
+    xSemaphoreGive(cacheMutex_);
+  }
+
+  // Check if we need to extend cache
+  if (!ensurePageCached(core, currentSectionPage_)) {
+    renderer_.drawCenteredText(core.settings.getReaderFontId(theme), 300, "Failed to load page", theme.primaryTextBlack,
+                               BOLD);
+    renderer_.displayBuffer();
+    return;
+  }
+
+  // Load and render page (cache is now guaranteed to exist)
+  xSemaphoreTake(cacheMutex_, portMAX_DELAY);
+  size_t pageCount = pageCache_ ? pageCache_->pageCount() : 0;
+  auto page = pageCache_ ? pageCache_->loadPage(currentSectionPage_) : nullptr;
+  xSemaphoreGive(cacheMutex_);
+
+  if (!page) {
+    Serial.println("[READER] Failed to load page, clearing cache");
+    xSemaphoreTake(cacheMutex_, portMAX_DELAY);
+    if (pageCache_) {
+      pageCache_->clear();
+      pageCache_.reset();
+    }
+    xSemaphoreGive(cacheMutex_);
+    needsRender_ = true;
+    return;
+  }
+
+  const int fontId = core.settings.getReaderFontId(theme);
+
+  renderPageContents(core, *page, vp.marginTop, vp.marginRight, vp.marginBottom, vp.marginLeft);
+  renderStatusBar(core, vp.marginRight, vp.marginBottom, vp.marginLeft);
+
+  displayWithRefresh(core);
+
+  // Grayscale text rendering (anti-aliasing)
+  if (core.settings.textAntiAliasing && renderer_.fontSupportsGrayscale(fontId) && renderer_.storeBwBuffer()) {
+    renderer_.clearScreen(0x00);
+    renderer_.setRenderMode(GfxRenderer::GRAYSCALE_LSB);
+    page->render(renderer_, fontId, vp.marginLeft, vp.marginTop, theme.primaryTextBlack);
+    renderer_.copyGrayscaleLsbBuffers();
+
+    renderer_.clearScreen(0x00);
+    renderer_.setRenderMode(GfxRenderer::GRAYSCALE_MSB);
+    page->render(renderer_, fontId, vp.marginLeft, vp.marginTop, theme.primaryTextBlack);
+    renderer_.copyGrayscaleMsbBuffers();
+
+    renderer_.displayGrayBuffer();
+    renderer_.setRenderMode(GfxRenderer::BW);
+    renderer_.restoreBwBuffer();
+  }
+
+  Serial.printf("[READER] Rendered page %d/%d\n", currentSectionPage_ + 1, pageCount);
+}
+
+bool ReaderState::ensurePageCached(Core& core, uint16_t pageNum) {
+  xSemaphoreTake(cacheMutex_, portMAX_DELAY);
+  if (!pageCache_) {
+    xSemaphoreGive(cacheMutex_);
+    return false;
+  }
+
+  // If page is already cached, we're good
+  size_t pageCount = pageCache_->pageCount();
+  bool needsExtension = pageCache_->needsExtension(pageNum);
+  bool isPartial = pageCache_->isPartial();
+  xSemaphoreGive(cacheMutex_);
+
+  if (pageNum < pageCount) {
+    // Check if we should pre-extend (approaching end of partial cache)
+    if (needsExtension) {
+      Serial.printf("[READER] Pre-extending cache at page %d\n", pageNum);
+      createOrExtendCache(core);
+    }
+    return true;
+  }
+
+  // Page not cached yet - need to extend
+  if (!isPartial) {
+    Serial.printf("[READER] Page %d not available (cache complete at %d pages)\n", pageNum, pageCount);
+    return false;
+  }
+
+  Serial.printf("[READER] Extending cache for page %d\n", pageNum);
+
+  const Theme& theme = THEME_MANAGER.current();
+  renderer_.clearScreen(theme.backgroundColor);
+  renderer_.drawCenteredText(core.settings.getReaderFontId(theme), 300, "Loading...", theme.primaryTextBlack, BOLD);
+  renderer_.displayBuffer();
+
+  createOrExtendCache(core);
+
+  xSemaphoreTake(cacheMutex_, portMAX_DELAY);
+  pageCount = pageCache_ ? pageCache_->pageCount() : 0;
+  xSemaphoreGive(cacheMutex_);
+
+  return pageNum < pageCount;
+}
+
+void ReaderState::createOrExtendCache(Core& core) {
+  const Theme& theme = THEME_MANAGER.current();
+  ContentType type = core.content.metadata().type;
+
+  const auto vp = getReaderViewport();
+  const auto config = core.settings.getRenderConfig(theme, vp.width, vp.height);
+
+  if (type == ContentType::Epub) {
+    auto* provider = core.content.asEpub();
+    if (!provider || !provider->getEpub()) return;
+
+    auto epub = provider->getEpubShared();
+    std::string imageCachePath = core.settings.showImages ? (epub->getCachePath() + "/images") : "";
+    std::string cachePath = epub->getCachePath() + "/sections/" + std::to_string(currentSpineIndex_) + ".bin";
+
+    EpubChapterParser parser(epub, currentSpineIndex_, renderer_, config, imageCachePath);
+
+    xSemaphoreTake(cacheMutex_, portMAX_DELAY);
+    if (!pageCache_) {
+      pageCache_.reset(new PageCache(cachePath));
+      if (pageCache_->load(config)) {
+        if (pageCache_->isPartial()) {
+          pageCache_->extend(parser, PageCache::DEFAULT_CACHE_CHUNK);
+        }
+        xSemaphoreGive(cacheMutex_);
+        return;
+      }
+    }
+    if (pageCache_->isPartial()) {
+      pageCache_->extend(parser, PageCache::DEFAULT_CACHE_CHUNK);
+    } else {
+      pageCache_->create(parser, config, PageCache::DEFAULT_CACHE_CHUNK);
+    }
+    xSemaphoreGive(cacheMutex_);
+  } else if (type == ContentType::Markdown) {
+    std::string cachePath = std::string(core.content.cacheDir()) + "/pages.bin";
+    MarkdownParser parser(contentPath_, renderer_, config);
+
+    xSemaphoreTake(cacheMutex_, portMAX_DELAY);
+    if (!pageCache_) {
+      pageCache_.reset(new PageCache(cachePath));
+      if (pageCache_->load(config)) {
+        if (pageCache_->isPartial()) {
+          pageCache_->extend(parser, PageCache::DEFAULT_CACHE_CHUNK);
+        }
+        xSemaphoreGive(cacheMutex_);
+        return;
+      }
+    }
+    if (pageCache_->isPartial()) {
+      pageCache_->extend(parser, PageCache::DEFAULT_CACHE_CHUNK);
+    } else {
+      pageCache_->create(parser, config, PageCache::DEFAULT_CACHE_CHUNK);
+    }
+    xSemaphoreGive(cacheMutex_);
+  } else {
+    // TXT only
+    std::string cachePath = std::string(core.content.cacheDir()) + "/pages.bin";
+    PlainTextParser parser(contentPath_, renderer_, config);
+
+    xSemaphoreTake(cacheMutex_, portMAX_DELAY);
+    if (!pageCache_) {
+      pageCache_.reset(new PageCache(cachePath));
+      if (pageCache_->load(config)) {
+        if (pageCache_->isPartial()) {
+          pageCache_->extend(parser, PageCache::DEFAULT_CACHE_CHUNK);
+        }
+        xSemaphoreGive(cacheMutex_);
+        return;
+      }
+    }
+    if (pageCache_->isPartial()) {
+      pageCache_->extend(parser, PageCache::DEFAULT_CACHE_CHUNK);
+    } else {
+      pageCache_->create(parser, config, PageCache::DEFAULT_CACHE_CHUNK);
+    }
+    xSemaphoreGive(cacheMutex_);
+  }
+}
+
+void ReaderState::renderPageContents(Core& core, Page& page, int marginTop, int marginRight, int marginBottom,
+                                     int marginLeft) {
+  (void)marginRight;
+  (void)marginBottom;
+
+  const Theme& theme = THEME_MANAGER.current();
+  const int fontId = core.settings.getReaderFontId(theme);
+  page.render(renderer_, fontId, marginLeft, marginTop, theme.primaryTextBlack);
+}
+
+void ReaderState::renderStatusBar(Core& core, int marginRight, int marginBottom, int marginLeft) {
+  xSemaphoreTake(cacheMutex_, portMAX_DELAY);
+  bool hasCache = (pageCache_ != nullptr);
+  xSemaphoreGive(cacheMutex_);
+
+  if (!hasCache) return;
+
+  const Theme& theme = THEME_MANAGER.current();
+  ContentType type = core.content.metadata().type;
+
+  // Build status bar data
+  ui::ReaderStatusBarData data{};
+  data.mode = core.settings.statusBar;
+  data.title = core.content.metadata().title;
+
+  // Battery
+  const uint16_t millivolts = batteryMonitor.readMillivolts();
+  data.batteryPercent = (millivolts < 100) ? -1 : BatteryMonitor::percentageFromMillivolts(millivolts);
+
+  // Page info
+  if (type == ContentType::Epub) {
+    auto* provider = core.content.asEpub();
+    if (provider && provider->getEpub()) {
+      data.currentPage = currentSectionPage_ + 1;
+      xSemaphoreTake(cacheMutex_, portMAX_DELAY);
+      data.totalPages = pageCache_->pageCount();
+      data.isPartial = pageCache_->isPartial();
+      xSemaphoreGive(cacheMutex_);
+      const float sectionProgress =
+          data.totalPages > 0 ? static_cast<float>(currentSectionPage_) / data.totalPages : 0.0f;
+      data.progressPercent = provider->getEpub()->calculateProgress(currentSpineIndex_, sectionProgress);
+    } else {
+      return;  // EPUB metadata unavailable
+    }
+  } else {
+    // TXT/Markdown: use estimated total pages
+    data.currentPage = currentSectionPage_ + 1;
+    data.totalPages = core.content.pageCount();
+    data.progressPercent = data.totalPages > 0 ? (data.currentPage * 100) / data.totalPages : 0;
+  }
+
+  ui::readerStatusBar(renderer_, theme, marginLeft, marginRight, marginBottom, data);
+}
+
+void ReaderState::renderXtcPage(Core& core) {
+  auto* provider = core.content.asXtc();
+  if (!provider) {
+    return;
+  }
+
+  const Theme& theme = THEME_MANAGER.current();
+  const int fontId = core.settings.getReaderFontId(theme);
+
+  auto result = xtcRenderer_.render(provider->getParser(), currentPage_, [this, &core]() { displayWithRefresh(core); });
+
+  switch (result) {
+    case XtcPageRenderer::RenderResult::Success:
+      break;
+    case XtcPageRenderer::RenderResult::EndOfBook:
+      ui::centeredMessage(renderer_, theme, fontId, "End of book");
+      break;
+    case XtcPageRenderer::RenderResult::InvalidDimensions:
+      ui::centeredMessage(renderer_, theme, fontId, "Invalid file");
+      break;
+    case XtcPageRenderer::RenderResult::AllocationFailed:
+      ui::centeredMessage(renderer_, theme, fontId, "Memory error");
+      break;
+    case XtcPageRenderer::RenderResult::PageLoadFailed:
+      ui::centeredMessage(renderer_, theme, fontId, "Page load error");
+      break;
+  }
+}
+
+void ReaderState::displayWithRefresh(Core& core) {
+  if (pagesUntilFullRefresh_ <= 1) {
+    renderer_.displayBuffer(EInkDisplay::HALF_REFRESH);
+    pagesUntilFullRefresh_ = core.settings.getPagesPerRefreshValue();
+  } else {
+    renderer_.displayBuffer();
+    pagesUntilFullRefresh_--;
+  }
+}
+
+ReaderState::Viewport ReaderState::getReaderViewport() const {
+  Viewport vp{};
+  renderer_.getOrientedViewableTRBL(&vp.marginTop, &vp.marginRight, &vp.marginBottom, &vp.marginLeft);
+  vp.marginLeft += horizontalPadding;
+  vp.marginRight += horizontalPadding;
+  vp.marginBottom += statusBarMargin;
+  vp.width = renderer_.getScreenWidth() - vp.marginLeft - vp.marginRight;
+  vp.height = renderer_.getScreenHeight() - vp.marginTop - vp.marginBottom;
+  return vp;
+}
+
+bool ReaderState::renderCoverPage(Core& core) {
+  Serial.printf("[%lu] [RDR] Generating cover for reader...\n", millis());
+  std::string coverPath = core.content.generateCover(core.settings.coverDithering);
+  if (coverPath.empty()) {
+    Serial.printf("[%lu] [RDR] No cover available, skipping cover page\n", millis());
+    return false;
+  }
+
+  Serial.printf("[%lu] [RDR] Rendering cover page from: %s\n", millis(), coverPath.c_str());
+  const auto vp = getReaderViewport();
+  int pagesUntilRefresh = pagesUntilFullRefresh_;
+
+  bool rendered =
+      CoverHelpers::renderCoverFromBmp(renderer_, coverPath, vp.marginTop, vp.marginRight, vp.marginBottom,
+                                       vp.marginLeft, pagesUntilRefresh, core.settings.getPagesPerRefreshValue());
+
+  pagesUntilFullRefresh_ = pagesUntilRefresh;
+  return rendered;
+}
+
+void ReaderState::startBackgroundCaching(Core& core) {
+  if (cacheTaskHandle_) {
+    return;  // Already running
+  }
+
+  Serial.println("[READER] Starting background page cache task");
+  coreForCacheTask_ = &core;
+  cacheTaskComplete_ = false;
+
+  xTaskCreate(&ReaderState::cacheTaskTrampoline, "PageCache", 4096, this, 0, &cacheTaskHandle_);
+}
+
+void ReaderState::cacheTaskTrampoline(void* param) { static_cast<ReaderState*>(param)->cacheTaskLoop(); }
+
+void ReaderState::cacheTaskLoop() {
+  const Theme& theme = THEME_MANAGER.current();
+
+  Serial.println("[READER] Background cache task started");
+
+  if (cacheTaskStopRequested_) {
+    Serial.println("[READER] Background cache task aborted (stop requested)");
+    vTaskSuspend(nullptr);
+    return;
+  }
+
+  // Build cache for current position
+  xSemaphoreTake(cacheMutex_, portMAX_DELAY);
+  bool cacheExists = (pageCache_ != nullptr);
+  xSemaphoreGive(cacheMutex_);
+
+  if (!cacheExists && !cacheTaskStopRequested_) {
+    Core& coreRef = *coreForCacheTask_;
+    ContentType type = coreRef.content.metadata().type;
+
+    if (type == ContentType::Epub) {
+      auto* provider = coreRef.content.asEpub();
+      if (provider && provider->getEpub() && !cacheTaskStopRequested_) {
+        const auto vp = getReaderViewport();
+        const auto config = coreRef.settings.getRenderConfig(theme, vp.width, vp.height);
+        std::string imageCachePath =
+            coreRef.settings.showImages ? (provider->getEpub()->getCachePath() + "/images") : "";
+        std::string cachePath =
+            provider->getEpub()->getCachePath() + "/sections/" + std::to_string(currentSpineIndex_) + ".bin";
+
+        xSemaphoreTake(cacheMutex_, portMAX_DELAY);
+        pageCache_.reset(new PageCache(cachePath));
+        bool loaded = pageCache_->load(config);
+        bool needsExtend = loaded && pageCache_->needsExtension(currentSectionPage_);
+        xSemaphoreGive(cacheMutex_);
+        if (!loaded || needsExtend) {
+          EpubChapterParser parser(provider->getEpubShared(), currentSpineIndex_, renderer_, config, imageCachePath);
+          xSemaphoreTake(cacheMutex_, portMAX_DELAY);
+          if (!cacheTaskStopRequested_) {
+            if (needsExtend) {
+              pageCache_->extend(parser, PageCache::DEFAULT_CACHE_CHUNK);
+            } else {
+              pageCache_->create(parser, config, PageCache::DEFAULT_CACHE_CHUNK);
+            }
+          }
+          xSemaphoreGive(cacheMutex_);
+        }
+      }
+    } else if (type == ContentType::Markdown && !cacheTaskStopRequested_) {
+      const auto vp = getReaderViewport();
+      const auto config = coreRef.settings.getRenderConfig(theme, vp.width, vp.height);
+      std::string cachePath = std::string(coreRef.content.cacheDir()) + "/pages.bin";
+
+      xSemaphoreTake(cacheMutex_, portMAX_DELAY);
+      pageCache_.reset(new PageCache(cachePath));
+      bool loaded = pageCache_->load(config);
+      bool needsExtend = loaded && pageCache_->needsExtension(currentSectionPage_);
+      xSemaphoreGive(cacheMutex_);
+      if (!loaded || needsExtend) {
+        MarkdownParser parser(contentPath_, renderer_, config);
+        xSemaphoreTake(cacheMutex_, portMAX_DELAY);
+        if (!cacheTaskStopRequested_) {
+          if (needsExtend) {
+            pageCache_->extend(parser, PageCache::DEFAULT_CACHE_CHUNK);
+          } else {
+            pageCache_->create(parser, config, PageCache::DEFAULT_CACHE_CHUNK);
+          }
+        }
+        xSemaphoreGive(cacheMutex_);
+      }
+    } else if (type == ContentType::Txt && !cacheTaskStopRequested_) {
+      const auto vp = getReaderViewport();
+      const auto config = coreRef.settings.getRenderConfig(theme, vp.width, vp.height);
+      std::string cachePath = std::string(coreRef.content.cacheDir()) + "/pages.bin";
+
+      xSemaphoreTake(cacheMutex_, portMAX_DELAY);
+      pageCache_.reset(new PageCache(cachePath));
+      bool loaded = pageCache_->load(config);
+      bool needsExtend = loaded && pageCache_->needsExtension(currentSectionPage_);
+      xSemaphoreGive(cacheMutex_);
+      if (!loaded || needsExtend) {
+        PlainTextParser parser(contentPath_, renderer_, config);
+        xSemaphoreTake(cacheMutex_, portMAX_DELAY);
+        if (!cacheTaskStopRequested_) {
+          if (needsExtend) {
+            pageCache_->extend(parser, PageCache::DEFAULT_CACHE_CHUNK);
+          } else {
+            pageCache_->create(parser, config, PageCache::DEFAULT_CACHE_CHUNK);
+          }
+        }
+        xSemaphoreGive(cacheMutex_);
+      }
+    }
+  }
+
+  if (!cacheTaskStopRequested_) {
+    cacheTaskComplete_ = true;
+    Serial.println("[READER] Background cache task completed");
+  } else {
+    Serial.println("[READER] Background cache task stopped");
+  }
+
+  // Suspend self - will be deleted by stopBackgroundCaching()
+  vTaskSuspend(nullptr);
+}
+
+void ReaderState::stopBackgroundCaching() {
+  if (cacheTaskHandle_) {
+    Serial.println("[READER] Stopping background cache task");
+    cacheTaskStopRequested_ = true;
+
+    // Wait for task to complete or suspend (max 500ms)
+    for (int i = 0; i < 50 && eTaskGetState(cacheTaskHandle_) == eRunning; i++) {
+      vTaskDelay(pdMS_TO_TICKS(10));
+    }
+
+    vTaskDelete(cacheTaskHandle_);
+    cacheTaskHandle_ = nullptr;
+    cacheTaskStopRequested_ = false;
+  }
+}
+
+// ============================================================================
+// TOC Overlay Mode
+// ============================================================================
+
+void ReaderState::enterTocMode(Core& core) {
+  if (core.content.tocCount() == 0) {
+    return;
+  }
+
+  populateTocView(core);
+  int currentIdx = findCurrentTocEntry(core);
+  if (currentIdx >= 0) {
+    tocView_.setCurrentChapter(static_cast<uint8_t>(currentIdx));
+  }
+
+  tocMode_ = true;
+  needsRender_ = true;
+  Serial.println("[READER] Entered TOC mode");
+}
+
+void ReaderState::exitTocMode() {
+  tocMode_ = false;
+  needsRender_ = true;
+  Serial.println("[READER] Exited TOC mode");
+}
+
+void ReaderState::handleTocInput(Core& core, const Event& e) {
+  if (e.type != EventType::ButtonPress) {
+    return;
+  }
+
+  switch (e.button) {
+    case Button::Up:
+    case Button::Left:
+      tocView_.moveUp();
+      needsRender_ = true;
+      break;
+
+    case Button::Down:
+    case Button::Right:
+      tocView_.moveDown();
+      needsRender_ = true;
+      break;
+
+    case Button::Center:
+      jumpToTocEntry(core, tocView_.selected);
+      exitTocMode();
+      break;
+
+    case Button::Back:
+      exitTocMode();
+      break;
+
+    case Button::Power:
+      break;
+  }
+}
+
+void ReaderState::populateTocView(Core& core) {
+  tocView_.clear();
+  const uint16_t count = core.content.tocCount();
+
+  for (uint16_t i = 0; i < count && i < ui::ChapterListView::MAX_CHAPTERS; i++) {
+    auto result = core.content.getTocEntry(i);
+    if (result.ok()) {
+      const TocEntry& entry = result.value;
+      tocView_.addChapter(entry.title, static_cast<uint16_t>(entry.pageIndex), entry.depth);
+    }
+  }
+}
+
+int ReaderState::findCurrentTocEntry(Core& core) {
+  ContentType type = core.content.metadata().type;
+
+  if (type == ContentType::Epub) {
+    auto* provider = core.content.asEpub();
+    if (provider && provider->getEpub()) {
+      return provider->getEpub()->getTocIndexForSpineIndex(currentSpineIndex_);
+    }
+  } else if (type == ContentType::Xtc) {
+    // For XTC, find chapter containing current page
+    const uint16_t count = core.content.tocCount();
+    int lastMatch = -1;
+    for (uint16_t i = 0; i < count; i++) {
+      auto result = core.content.getTocEntry(i);
+      if (result.ok() && result.value.pageIndex <= static_cast<uint32_t>(currentPage_)) {
+        lastMatch = i;
+      }
+    }
+    return lastMatch;
+  }
+
+  return -1;
+}
+
+void ReaderState::jumpToTocEntry(Core& core, int tocIndex) {
+  if (tocIndex < 0 || tocIndex >= tocView_.chapterCount) {
+    return;
+  }
+
+  const auto& chapter = tocView_.chapters[tocIndex];
+  ContentType type = core.content.metadata().type;
+
+  if (type == ContentType::Epub) {
+    // For EPUB, pageNum is spine index
+    if (static_cast<int>(chapter.pageNum) != currentSpineIndex_) {
+      currentSpineIndex_ = chapter.pageNum;
+      currentSectionPage_ = 0;
+      stopBackgroundCaching();
+      xSemaphoreTake(cacheMutex_, portMAX_DELAY);
+      pageCache_.reset();
+      xSemaphoreGive(cacheMutex_);
+      cacheTaskComplete_ = false;
+    }
+  } else if (type == ContentType::Xtc) {
+    // For XTC, pageNum is page index
+    currentPage_ = chapter.pageNum;
+  }
+
+  needsRender_ = true;
+  Serial.printf("[READER] Jumped to TOC entry %d (spine/page %d)\n", tocIndex, chapter.pageNum);
+}
+
+void ReaderState::renderTocOverlay(Core& core) {
+  const Theme& theme = THEME_MANAGER.current();
+  constexpr int startY = 60;
+  const int availableHeight = renderer_.getScreenHeight() - startY - 20;
+  const int itemHeight = theme.itemHeight + theme.itemSpacing;
+  const int visibleCount = availableHeight / itemHeight;
+
+  // Adjust scroll to keep selection visible
+  tocView_.ensureVisible(visibleCount);
+
+  renderer_.clearScreen(theme.backgroundColor);
+  renderer_.drawCenteredText(theme.uiFontId, 15, "Chapters", theme.primaryTextBlack, BOLD);
+
+  const int end = std::min(tocView_.scrollOffset + visibleCount, static_cast<int>(tocView_.chapterCount));
+  for (int i = tocView_.scrollOffset; i < end; i++) {
+    const int y = startY + (i - tocView_.scrollOffset) * itemHeight;
+    ui::chapterItem(renderer_, theme, y, tocView_.chapters[i].title, tocView_.chapters[i].depth, i == tocView_.selected,
+                    i == tocView_.currentChapter);
+  }
+
+  renderer_.displayBuffer();
+  core.display.markDirty();
+}
+
+}  // namespace papyrix

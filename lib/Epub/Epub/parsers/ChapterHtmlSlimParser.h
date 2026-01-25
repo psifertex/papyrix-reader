@@ -22,8 +22,8 @@ class Print;
 class ChapterHtmlSlimParser {
   const std::string& filepath;
   GfxRenderer& renderer;
-  std::function<void(std::unique_ptr<Page>)> completePageFn;
-  std::function<void(int)> progressFn;  // Progress callback (0-100)
+  std::function<bool(std::unique_ptr<Page>)> completePageFn;  // Returns false to stop parsing
+  std::function<void(int)> progressFn;                        // Progress callback (0-100)
   int depth = 0;
   int skipUntilDepth = INT_MAX;
   int boldUntilDepth = INT_MAX;
@@ -47,6 +47,10 @@ class ChapterHtmlSlimParser {
   // CSS support
   const CssParser* cssParser_ = nullptr;
 
+  // XML parser handle for stopping mid-parse
+  XML_Parser xmlParser_ = nullptr;
+  bool stopRequested_ = false;
+
   void startNewTextBlock(TextBlock::BLOCK_STYLE style);
   void makePages();
   std::string cacheImage(const std::string& src);
@@ -58,7 +62,7 @@ class ChapterHtmlSlimParser {
 
  public:
   explicit ChapterHtmlSlimParser(const std::string& filepath, GfxRenderer& renderer, const RenderConfig& config,
-                                 const std::function<void(std::unique_ptr<Page>)>& completePageFn,
+                                 const std::function<bool(std::unique_ptr<Page>)>& completePageFn,
                                  const std::function<void(int)>& progressFn = nullptr,
                                  const std::string& chapterBasePath = "", const std::string& imageCachePath = "",
                                  const std::function<bool(const std::string&, Print&, size_t)>& readItemFn = nullptr,
