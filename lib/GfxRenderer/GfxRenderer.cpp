@@ -1,5 +1,8 @@
 #include "GfxRenderer.h"
 
+#include <ExternalFont.h>
+#include <ScriptDetector.h>
+#include <ThaiShaper.h>
 #include <Utf8.h>
 
 void GfxRenderer::insertFont(const int fontId, EpdFontFamily font) { fontMap.insert({fontId, font}); }
@@ -86,8 +89,37 @@ int GfxRenderer::getTextWidth(const int fontId, const char* text, const EpdFontF
     return it->second;
   }
 
-  int w = 0, h = 0;
-  fontMap.at(fontId).getTextDimensions(text, &w, &h, style);
+  // Check if text contains Thai - use cluster-based width calculation
+  int w = 0;
+  if (ScriptDetector::containsThai(text)) {
+    w = getThaiTextWidth(fontId, text, style);
+  } else if (_externalFont && _externalFont->isLoaded()) {
+    // Character-by-character calculation with external font fallback
+    const auto& font = fontMap.at(fontId);
+    const char* ptr = text;
+    uint32_t cp;
+    while ((cp = utf8NextCodepoint(reinterpret_cast<const uint8_t**>(&ptr)))) {
+      const EpdGlyph* glyph = font.getGlyph(cp, style);
+      if (glyph) {
+        w += glyph->advanceX;
+      } else {
+        // Try external font
+        const int extWidth = getExternalGlyphWidth(cp);
+        if (extWidth > 0) {
+          w += extWidth;
+        } else {
+          // Fall back to '?' glyph width
+          const EpdGlyph* fallback = font.getGlyph('?', style);
+          if (fallback) {
+            w += fallback->advanceX;
+          }
+        }
+      }
+    }
+  } else {
+    int h = 0;
+    fontMap.at(fontId).getTextDimensions(text, &w, &h, style);
+  }
 
   // Limit cache size to prevent heap fragmentation
   if (wordWidthCache.size() >= MAX_WIDTH_CACHE_SIZE) {
@@ -106,9 +138,6 @@ void GfxRenderer::drawCenteredText(const int fontId, const int y, const char* te
 
 void GfxRenderer::drawText(const int fontId, const int x, const int y, const char* text, const bool black,
                            const EpdFontFamily::Style style) const {
-  const int yPos = y + getFontAscenderSize(fontId);
-  int xpos = x;
-
   // cannot draw a NULL / empty string
   if (text == nullptr || *text == '\0') {
     return;
@@ -124,6 +153,16 @@ void GfxRenderer::drawText(const int fontId, const int x, const int y, const cha
   if (!font.hasPrintableChars(text, style)) {
     return;
   }
+
+  // Check if text contains Thai script - use Thai rendering path if so
+  if (ScriptDetector::containsThai(text)) {
+    drawThaiText(fontId, x, y, text, black, style);
+    return;
+  }
+
+  // Standard rendering path for non-Thai text
+  const int yPos = y + getFontAscenderSize(fontId);
+  int xpos = x;
 
   uint32_t cp;
   while ((cp = utf8NextCodepoint(reinterpret_cast<const uint8_t**>(&text)))) {
@@ -682,6 +721,12 @@ void GfxRenderer::renderChar(const EpdFontFamily& fontFamily, const uint32_t cp,
                              const bool pixelState, const EpdFontFamily::Style style) const {
   const EpdGlyph* glyph = fontFamily.getGlyph(cp, style);
   if (!glyph) {
+    // Try external font fallback (for CJK characters)
+    if (_externalFont && _externalFont->isLoaded()) {
+      renderExternalGlyph(cp, x, *y, pixelState);
+      return;
+    }
+
     // For whitespace characters missing from font, advance by space width instead of rendering '?'
     if (cp == 0x2002 || cp == 0x2003 || cp == 0x00A0) {  // EN SPACE, EM SPACE, NBSP
       const EpdGlyph* spaceGlyph = fontFamily.getGlyph(' ', style);
@@ -804,5 +849,220 @@ void GfxRenderer::freeBitmapRowBuffers() {
   if (bitmapRowBytes_) {
     free(bitmapRowBytes_);
     bitmapRowBytes_ = nullptr;
+  }
+}
+
+void GfxRenderer::renderExternalGlyph(const uint32_t cp, int* x, const int y, const bool pixelState) const {
+  if (!_externalFont || !_externalFont->isLoaded()) {
+    return;
+  }
+
+  const uint8_t* bitmap = _externalFont->getGlyph(cp);
+  if (!bitmap) {
+    // Glyph not found - advance by 1/3 char width as fallback
+    *x += _externalFont->getCharWidth() / 3;
+    return;
+  }
+
+  uint8_t minX = 0;
+  uint8_t advanceX = 0;
+  if (!_externalFont->getGlyphMetrics(cp, &minX, &advanceX)) {
+    advanceX = _externalFont->getCharWidth();
+  }
+
+  const int w = _externalFont->getCharWidth();
+  const int h = _externalFont->getCharHeight();
+  const int bytesPerRow = _externalFont->getBytesPerRow();
+  const int screenHeight = getScreenHeight();
+  const int screenWidth = getScreenWidth();
+
+  for (int glyphY = 0; glyphY < h; glyphY++) {
+    const int screenY = y + glyphY;
+    if (screenY < 0 || screenY >= screenHeight) continue;
+
+    for (int glyphX = minX; glyphX < w; glyphX++) {
+      const int screenX = *x + glyphX - minX;
+      if (screenX < 0 || screenX >= screenWidth) continue;
+
+      const int byteIdx = glyphY * bytesPerRow + (glyphX / 8);
+      const int bitIdx = 7 - (glyphX % 8);
+      if ((bitmap[byteIdx] >> bitIdx) & 1) {
+        drawPixel(screenX, screenY, pixelState);
+      }
+    }
+  }
+
+  *x += advanceX;
+}
+
+int GfxRenderer::getExternalGlyphWidth(const uint32_t cp) const {
+  if (!_externalFont || !_externalFont->isLoaded()) {
+    return 0;
+  }
+
+  // Ensure glyph is loaded to get metrics
+  _externalFont->getGlyph(cp);
+
+  uint8_t minX = 0;
+  uint8_t advanceX = _externalFont->getCharWidth();
+  if (_externalFont->getGlyphMetrics(cp, &minX, &advanceX)) {
+    return advanceX;
+  }
+
+  // Fallback to full character width
+  return _externalFont->getCharWidth();
+}
+
+// ============================================================================
+// Thai Text Rendering
+// ============================================================================
+
+int GfxRenderer::getThaiTextWidth(const int fontId, const char* text, const EpdFontFamily::Style style) const {
+  if (text == nullptr || *text == '\0') {
+    return 0;
+  }
+
+  if (fontMap.count(fontId) == 0) {
+    Serial.printf("[%lu] [GFX] Font %d not found\n", millis(), fontId);
+    return 0;
+  }
+
+  const auto& font = fontMap.at(fontId);
+  int totalWidth = 0;
+
+  // Build clusters and sum their widths
+  auto clusters = ThaiShaper::ThaiClusterBuilder::buildClusters(text);
+
+  for (const auto& cluster : clusters) {
+    for (const auto& glyph : cluster.glyphs) {
+      if (!glyph.zeroAdvance) {
+        const EpdGlyph* glyphData = font.getGlyph(glyph.codepoint, style);
+        if (!glyphData) {
+          glyphData = font.getGlyph('?', style);
+        }
+        if (glyphData) {
+          totalWidth += glyphData->advanceX;
+        }
+      }
+    }
+  }
+
+  return totalWidth;
+}
+
+void GfxRenderer::drawThaiText(const int fontId, const int x, const int y, const char* text, const bool black,
+                               const EpdFontFamily::Style style) const {
+  if (fontMap.count(fontId) == 0) {
+    Serial.printf("[%lu] [GFX] Font %d not found\n", millis(), fontId);
+    return;
+  }
+
+  const int yPos = y + getFontAscenderSize(fontId);
+  int xpos = x;
+
+  const auto font = fontMap.at(fontId);
+
+  // Build Thai clusters from the text
+  auto clusters = ThaiShaper::ThaiClusterBuilder::buildClusters(text);
+
+  // Render each cluster
+  for (const auto& cluster : clusters) {
+    renderThaiCluster(font, cluster, &xpos, yPos, black, style, fontId);
+  }
+}
+
+void GfxRenderer::renderThaiCluster(const EpdFontFamily& fontFamily, const ThaiShaper::ThaiCluster& cluster, int* x,
+                                    const int y, const bool pixelState, const EpdFontFamily::Style style,
+                                    const int fontId) const {
+  const EpdFontData* fontData = fontFamily.getData(style);
+  if (!fontData) {
+    return;
+  }
+
+  // Scale factor for stacked marks (tone mark above vowel)
+  // 26px is the reference font height used for Thai glyph offset calculations
+  const int fontHeight = fontData->advanceY;
+  const float yScale = fontHeight / 26.0f;
+
+  int baseX = *x;  // Store base position for combining marks
+
+  for (const auto& glyph : cluster.glyphs) {
+    const EpdGlyph* glyphData = fontFamily.getGlyph(glyph.codepoint, style);
+
+    if (!glyphData) {
+      glyphData = fontFamily.getGlyph('?', style);
+    }
+    if (!glyphData) {
+      continue;
+    }
+
+    const int is2Bit = fontData->is2Bit;
+    const uint32_t offset = glyphData->dataOffset;
+    const uint8_t width = glyphData->width;
+    const uint8_t height = glyphData->height;
+    const int left = glyphData->left;
+
+    // Calculate x position for this glyph
+    int glyphX;
+    if (glyph.zeroAdvance) {
+      // Combining mark: position relative to base consonant
+      glyphX = baseX + glyph.xOffset;
+    } else {
+      // Normal glyph: position at current cursor
+      glyphX = *x + glyph.xOffset;
+    }
+
+    // Calculate y offset - only apply scaling for stacked marks
+    int yOffset = 0;
+    if (glyph.yOffset < -2) {
+      yOffset = static_cast<int>(glyph.yOffset * yScale);
+    }
+    const int glyphY = y + yOffset;
+
+    if (fontData->bitmap == nullptr) {
+      continue;
+    }
+    const uint8_t* bitmap = &fontData->bitmap[offset];
+
+    const int screenHeight = getScreenHeight();
+    const int screenWidth = getScreenWidth();
+
+    for (int bitmapY = 0; bitmapY < height; bitmapY++) {
+      const int screenY = glyphY - glyphData->top + bitmapY;
+      if (screenY < 0 || screenY >= screenHeight) continue;
+
+      for (int bitmapX = 0; bitmapX < width; bitmapX++) {
+        const int pixelPosition = bitmapY * width + bitmapX;
+        const int screenX = glyphX + left + bitmapX;
+        if (screenX < 0 || screenX >= screenWidth) continue;
+
+        if (is2Bit) {
+          const uint8_t byte = bitmap[pixelPosition / 4];
+          const uint8_t bit_index = (3 - pixelPosition % 4) * 2;
+          const uint8_t bmpVal = 3 - (byte >> bit_index) & 0x3;
+
+          if (renderMode == BW && bmpVal < 3) {
+            drawPixel(screenX, screenY, pixelState);
+          } else if (renderMode == GRAYSCALE_MSB && (bmpVal == 1 || bmpVal == 2)) {
+            drawPixel(screenX, screenY, false);
+          } else if (renderMode == GRAYSCALE_LSB && bmpVal == 1) {
+            drawPixel(screenX, screenY, false);
+          }
+        } else {
+          const uint8_t byte = bitmap[pixelPosition / 8];
+          const uint8_t bit_index = 7 - (pixelPosition % 8);
+
+          if ((byte >> bit_index) & 1) {
+            drawPixel(screenX, screenY, pixelState);
+          }
+        }
+      }
+    }
+
+    // Track advance for non-combining glyphs
+    if (!glyph.zeroAdvance) {
+      baseX = *x + glyphData->advanceX;
+      *x += glyphData->advanceX;
+    }
   }
 }

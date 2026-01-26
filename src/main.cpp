@@ -1,10 +1,9 @@
-#include <LittleFS.h>  // Must be first to avoid FILE_READ/FILE_WRITE redefinition with SdFat
-
 #include <Arduino.h>
 #include <EInkDisplay.h>
 #include <Epub.h>
 #include <GfxRenderer.h>
 #include <InputManager.h>
+#include <LittleFS.h>  // Must be first to avoid FILE_READ/FILE_WRITE redefinition with SdFat
 #include <SDCardManager.h>
 #include <SPI.h>
 #include <builtinFonts/reader_2b.h>

@@ -1,9 +1,8 @@
-#include <LittleFS.h>  // Must be first to avoid FILE_READ/FILE_WRITE redefinition with SdFat
-
 #include "SettingsState.h"
 
 #include <Arduino.h>
 #include <GfxRenderer.h>
+#include <LittleFS.h>  // Must be first to avoid FILE_READ/FILE_WRITE redefinition with SdFat
 #include <SDCardManager.h>
 
 #include "../Battery.h"

@@ -2,6 +2,7 @@
 
 #include <EpdFont.h>
 #include <EpdFontFamily.h>
+#include <ExternalFont.h>
 #include <GfxRenderer.h>
 
 #include <map>
@@ -78,10 +79,48 @@ class FontManager {
   int getFontId(const char* familyName, int builtinFontId);
 
   /**
+   * Get font ID for reader fonts with automatic cleanup of previous fonts.
+   * This prevents memory leaks when switching between font sizes.
+   *
+   * @param familyName Font family name (empty = builtin)
+   * @param builtinFontId Fallback font ID
+   * @return Font ID to use
+   */
+  int getReaderFontId(const char* familyName, int builtinFontId);
+
+  /**
    * Generate a unique font ID for a family name.
    * Uses hash of the name for consistency.
    */
   static int generateFontId(const char* familyName);
+
+  /**
+   * Check if a font family name refers to a .bin external font.
+   */
+  static bool isBinFont(const char* familyName);
+
+  // External font (CJK fallback) support
+  /**
+   * Load an external font (.bin format) for CJK character fallback.
+   * @param filename Filename under /config/fonts/ (e.g., "NotoSansCJK_24_24x26.bin")
+   * @return true if loaded successfully
+   */
+  bool loadExternalFont(const char* filename);
+
+  /**
+   * Unload the external font and free memory.
+   */
+  void unloadExternalFont();
+
+  /**
+   * Get the external font pointer (may be nullptr).
+   */
+  ExternalFont* getExternalFont() { return (_externalFont && _externalFont->isLoaded()) ? _externalFont : nullptr; }
+
+  /**
+   * Log information about all loaded fonts.
+   */
+  void logFontInfo() const;
 
  private:
   FontManager();
@@ -106,6 +145,12 @@ class FontManager {
   };
 
   std::map<int, LoadedFamily> loadedFamilies;
+
+  // Track active reader font for cleanup when switching sizes
+  int _activeReaderFontId = 0;
+
+  // External font for CJK fallback (pointer to avoid 54KB allocation when unused)
+  ExternalFont* _externalFont = nullptr;
 
   LoadedFont loadSingleFont(const char* path);
   void freeFont(LoadedFont& font);

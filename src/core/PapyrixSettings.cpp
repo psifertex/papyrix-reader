@@ -122,11 +122,11 @@ Result<void> Settings::load(drivers::Storage& storage) {
 int Settings::getReaderFontId(const Theme& theme) const {
   switch (fontSize) {
     case FontMedium:
-      return FONT_MANAGER.getFontId(theme.readerFontFamilyMedium, theme.readerFontIdMedium);
+      return FONT_MANAGER.getReaderFontId(theme.readerFontFamilyMedium, theme.readerFontIdMedium);
     case FontLarge:
-      return FONT_MANAGER.getFontId(theme.readerFontFamilyLarge, theme.readerFontIdLarge);
+      return FONT_MANAGER.getReaderFontId(theme.readerFontFamilyLarge, theme.readerFontIdLarge);
     default:
-      return FONT_MANAGER.getFontId(theme.readerFontFamilySmall, theme.readerFontId);
+      return FONT_MANAGER.getReaderFontId(theme.readerFontFamilySmall, theme.readerFontId);
   }
 }
 

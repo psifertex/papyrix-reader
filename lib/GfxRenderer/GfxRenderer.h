@@ -2,12 +2,16 @@
 
 #include <EInkDisplay.h>
 #include <EpdFontFamily.h>
+#include <ThaiCluster.h>
 
 #include <map>
 #include <unordered_map>
 #include <vector>
 
 #include "Bitmap.h"
+
+// Forward declaration for external CJK font support
+class ExternalFont;
 
 class GfxRenderer {
  public:
@@ -32,6 +36,7 @@ class GfxRenderer {
   Orientation orientation;
   uint8_t* bwBufferChunks[BW_BUFFER_NUM_CHUNKS] = {nullptr};
   std::map<int, EpdFontFamily> fontMap;
+  ExternalFont* _externalFont = nullptr;
 
   // Pre-allocated row buffers for bitmap rendering (reduces heap fragmentation)
   // Sized for max screen dimension (800 pixels): outputRow = 800/4 = 200 bytes, rowBytes = 800*3 = 2400 bytes (24bpp)
@@ -66,6 +71,10 @@ class GfxRenderer {
 
   void renderChar(const EpdFontFamily& fontFamily, uint32_t cp, int* x, const int* y, bool pixelState,
                   EpdFontFamily::Style style) const;
+  void renderThaiCluster(const EpdFontFamily& fontFamily, const ThaiShaper::ThaiCluster& cluster, int* x, int y,
+                         bool pixelState, EpdFontFamily::Style style, int fontId) const;
+  void renderExternalGlyph(uint32_t cp, int* x, int y, bool pixelState) const;
+  int getExternalGlyphWidth(uint32_t cp) const;
   void freeBwBufferChunks();
   void rotateCoordinates(int x, int y, int* rotatedX, int* rotatedY) const;
 
@@ -84,6 +93,8 @@ class GfxRenderer {
   void insertFont(int fontId, EpdFontFamily font);
   void removeFont(int fontId);
   void clearWidthCache() { wordWidthCache.clear(); }
+  void setExternalFont(ExternalFont* font) { _externalFont = font; }
+  ExternalFont* getExternalFont() const { return _externalFont; }
 
   // Orientation control (affects logical width/height and coordinate transforms)
   void setOrientation(const Orientation o) { orientation = o; }
@@ -124,6 +135,11 @@ class GfxRenderer {
   std::vector<std::string> wrapTextWithHyphenation(int fontId, const char* text, int maxWidth, int maxLines,
                                                    EpdFontFamily::Style style = EpdFontFamily::REGULAR) const;
   bool fontSupportsGrayscale(int fontId) const;
+
+  // Thai text rendering
+  int getThaiTextWidth(int fontId, const char* text, EpdFontFamily::Style style = EpdFontFamily::REGULAR) const;
+  void drawThaiText(int fontId, int x, int y, const char* text, bool black = true,
+                    EpdFontFamily::Style style = EpdFontFamily::REGULAR) const;
 
   // UI Components
   void drawButtonHints(int fontId, const char* btn1, const char* btn2, const char* btn3, const char* btn4,

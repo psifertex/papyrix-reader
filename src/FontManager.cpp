@@ -14,7 +14,10 @@ FontManager& FontManager::instance() {
 
 FontManager::FontManager() = default;
 
-FontManager::~FontManager() { unloadAllFonts(); }
+FontManager::~FontManager() {
+  unloadAllFonts();
+  unloadExternalFont();
+}
 
 void FontManager::init(GfxRenderer& r) { renderer = &r; }
 
@@ -183,4 +186,117 @@ int FontManager::generateFontId(const char* familyName) {
     familyName++;
   }
   return static_cast<int>(hash);
+}
+
+bool FontManager::isBinFont(const char* familyName) {
+  if (!familyName) return false;
+  size_t len = strlen(familyName);
+  return len > 4 && strcmp(familyName + len - 4, ".bin") == 0;
+}
+
+int FontManager::getReaderFontId(const char* familyName, int builtinFontId) {
+  if (!familyName || !*familyName) {
+    // Using built-in font - unload any custom reader font and external font
+    if (_activeReaderFontId != 0 && _activeReaderFontId != builtinFontId) {
+      Serial.printf("[FONT] Unloading custom reader font ID %d (switching to built-in)\n", _activeReaderFontId);
+      unloadFontFamily(_activeReaderFontId);
+      _activeReaderFontId = 0;
+    }
+    unloadExternalFont();
+    return builtinFontId;
+  }
+
+  // Handle .bin fonts as external fonts (CJK fallback)
+  if (isBinFont(familyName)) {
+    // Unload any previous custom .epdfont reader font
+    if (_activeReaderFontId != 0 && _activeReaderFontId != builtinFontId) {
+      Serial.printf("[FONT] Unloading custom reader font ID %d (switching to .bin)\n", _activeReaderFontId);
+      unloadFontFamily(_activeReaderFontId);
+      _activeReaderFontId = 0;
+    }
+
+    // Load as external font - provides fallback for CJK characters
+    if (loadExternalFont(familyName)) {
+      Serial.printf("[FONT] Using built-in font + %s for CJK fallback\n", familyName);
+    }
+    // Return builtin font ID - ASCII uses built-in, CJK falls back to external
+    return builtinFontId;
+  }
+
+  int targetId = generateFontId(familyName);
+
+  // If switching to a different custom font, unload previous
+  if (_activeReaderFontId != 0 && _activeReaderFontId != targetId) {
+    Serial.printf("[FONT] Unloading previous reader font ID %d\n", _activeReaderFontId);
+    unloadFontFamily(_activeReaderFontId);
+  }
+
+  // Load new font if needed
+  if (loadedFamilies.find(targetId) == loadedFamilies.end()) {
+    if (!loadFontFamily(familyName, targetId)) {
+      _activeReaderFontId = 0;
+      return builtinFontId;
+    }
+  }
+
+  _activeReaderFontId = targetId;
+  return targetId;
+}
+
+bool FontManager::loadExternalFont(const char* filename) {
+  if (!renderer || !filename || !*filename) {
+    return false;
+  }
+
+  char path[80];
+  snprintf(path, sizeof(path), "%s/%s", CONFIG_FONTS_DIR, filename);
+
+  // Allocate if needed
+  if (!_externalFont) {
+    _externalFont = new ExternalFont();
+  }
+
+  if (!_externalFont->load(path)) {
+    Serial.printf("[FONT] Failed to load external font: %s\n", path);
+    delete _externalFont;
+    _externalFont = nullptr;
+    return false;
+  }
+
+  renderer->setExternalFont(_externalFont);
+  Serial.printf("[FONT] Loaded external font: %s (CJK fallback)\n", filename);
+  return true;
+}
+
+void FontManager::unloadExternalFont() {
+  if (_externalFont) {
+    if (renderer) {
+      renderer->setExternalFont(nullptr);
+    }
+    delete _externalFont;
+    _externalFont = nullptr;
+    Serial.println("[FONT] Unloaded external font");
+  }
+}
+
+void FontManager::logFontInfo() const {
+  Serial.println("[FONT] === Current Font Configuration ===");
+
+  // Log built-in fonts info
+  Serial.println("[FONT] Built-in reader fonts: small/medium/large (FLASH)");
+  Serial.println("[FONT] Built-in UI font: ui_12 (FLASH)");
+
+  // Log loaded custom fonts
+  for (const auto& [id, family] : loadedFamilies) {
+    Serial.printf("[FONT] Custom: ID %d from SD (loaded)\n", id);
+  }
+
+  // Log external CJK font
+  if (_externalFont && _externalFont->isLoaded()) {
+    Serial.printf("[FONT] External CJK: %s_%d_%dx%d.bin from SD\n", _externalFont->getFontName(),
+                  _externalFont->getFontSize(), _externalFont->getCharWidth(), _externalFont->getCharHeight());
+    _externalFont->logCacheStats();
+  }
+
+  Serial.println("[FONT] =====================================");
 }

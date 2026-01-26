@@ -49,6 +49,26 @@ const INTERVALS_CJK_BASE = [
   [0xac00, 0xd7af], // Hangul Syllables (11,172 chars)
 ];
 
+// CJK intervals for --bin format (includes Vietnamese/Thai)
+const INTERVALS_BIN_CJK = [
+  [0x0000, 0x007f], // Basic Latin (ASCII)
+  [0x0080, 0x00ff], // Latin-1 Supplement
+  [0x0100, 0x017f], // Latin Extended-A
+  [0x0180, 0x024f], // Latin Extended-B (Vietnamese)
+  [0x0250, 0x02af], // IPA Extensions
+  [0x0300, 0x036f], // Combining Diacritical Marks
+  [0x0e00, 0x0e7f], // Thai
+  [0x1e00, 0x1eff], // Latin Extended Additional (Vietnamese tones)
+  [0x2000, 0x206f], // General Punctuation
+  [0x2010, 0x203a], // Dashes, quotes, prime marks
+  [0x20a0, 0x20cf], // Currency symbols
+  [0x3000, 0x303f], // CJK Symbols and Punctuation
+  [0x3040, 0x309f], // Hiragana
+  [0x30a0, 0x30ff], // Katakana
+  [0x4e00, 0x9fff], // CJK Unified Ideographs (20,992 chars)
+  [0xff00, 0xff5f], // Fullwidth forms
+];
+
 /**
  * Scanline rasterizer for opentype.js paths - renders glyph to 8-bit grayscale with 4x supersampling
  */
@@ -410,7 +430,7 @@ function convertFontToHeader(fontPath, outputPath, size, is2Bit, intervals, head
 
     // Bitmap array
     const combinedBitmap = Buffer.concat(glyphs.map(g => g.pixelData));
-    lines.push(`static const uint8_t ${headerName}Bitmaps[${totalBitmapSize}] = {`);
+    lines.push(`static const uint8_t PROGMEM ${headerName}Bitmaps[${totalBitmapSize}] = {`);
     for (let i = 0; i < combinedBitmap.length; i += 19) {
       const chunk = combinedBitmap.slice(i, Math.min(i + 19, combinedBitmap.length));
       const hex = Array.from(chunk).map(b => `0x${b.toString(16).toUpperCase().padStart(2, "0")}`).join(", ");
@@ -427,14 +447,14 @@ function convertFontToHeader(fontPath, outputPath, size, is2Bit, intervals, head
       } catch { return ""; }
     };
 
-    lines.push(`static const EpdGlyph ${headerName}Glyphs[] = {`);
+    lines.push(`static const EpdGlyph PROGMEM ${headerName}Glyphs[] = {`);
     for (const g of glyphs) {
       lines.push(`    {${g.width}, ${g.height}, ${g.advanceX}, ${g.left}, ${g.top}, ${g.dataLength}, ${g.dataOffset}},${getCharComment(g.codePoint)}`);
     }
     lines.push("};", "");
 
     // Intervals array
-    lines.push(`static const EpdUnicodeInterval ${headerName}Intervals[] = {`);
+    lines.push(`static const EpdUnicodeInterval PROGMEM ${headerName}Intervals[] = {`);
     let glyphOffset = 0;
     const intervalEntries = validIntervals.map(([s, e]) => {
       const entry = `{0x${s.toString(16)}, 0x${e.toString(16)}, 0x${glyphOffset.toString(16)}}`;
@@ -530,6 +550,120 @@ ${glyphs.map(g => `    <div class="glyph">
   }
 }
 
+/**
+ * Convert font to raw .bin format for ExternalFont (direct Unicode indexing)
+ * Output format: FontName_size_WxH.bin
+ * Each glyph is stored at offset = codepoint * bytesPerChar
+ * Glyph data is 1-bit packed bitmap, MSB first
+ */
+function convertFontToBin(fontPath, outputPath, size, intervals, variations = null) {
+  if (!fs.existsSync(fontPath)) {
+    console.error(`  Warning: Font file not found: ${fontPath}`);
+    return false;
+  }
+
+  const label = `Converting to .bin: ${path.basename(fontPath)}`;
+  console.log(`  ${label}`);
+
+  try {
+    const font = opentype.loadSync(fontPath);
+    const rasterizer = new GlyphRasterizer(font, size, variations);
+
+    // Find max codepoint from intervals
+    const maxCodepoint = Math.max(...intervals.map(([, end]) => end));
+    console.log(`  Max codepoint: U+${maxCodepoint.toString(16).toUpperCase()} (${maxCodepoint})`);
+
+    // Render a sample glyph to determine dimensions
+    let charWidth = 0, charHeight = 0;
+    const sampleChars = [0x4e2d, 0x56fd, 0x6587, 'A'.charCodeAt(0), 'W'.charCodeAt(0)]; // CJK + Latin
+    for (const cp of sampleChars) {
+      const glyph = rasterizer.renderGlyph(cp);
+      if (glyph && glyph.width > 0) {
+        charWidth = Math.max(charWidth, glyph.width + Math.abs(glyph.left));
+        charHeight = Math.max(charHeight, glyph.height);
+      }
+    }
+
+    // Add padding for consistent cell size
+    charWidth = Math.ceil(charWidth * 1.1);
+    charHeight = Math.ceil(charHeight * 1.1);
+
+    const bytesPerRow = Math.ceil(charWidth / 8);
+    const bytesPerChar = bytesPerRow * charHeight;
+
+    console.log(`  Cell size: ${charWidth}x${charHeight}, ${bytesPerChar} bytes/char`);
+
+    // Create output buffer (direct indexed by codepoint)
+    const totalSize = (maxCodepoint + 1) * bytesPerChar;
+    console.log(`  Output size: ${(totalSize / 1024 / 1024).toFixed(1)} MB`);
+
+    const buffer = Buffer.alloc(totalSize, 0);
+
+    // Render all glyphs in intervals
+    let rendered = 0, total = 0;
+    for (const [start, end] of intervals) {
+      total += end - start + 1;
+    }
+
+    let lastPercent = -1;
+    for (const [start, end] of intervals) {
+      for (let cp = start; cp <= end; cp++) {
+        const glyph = rasterizer.renderGlyph(cp);
+        const offset = cp * bytesPerChar;
+
+        if (glyph && glyph.width > 0 && glyph.height > 0 && glyph.data) {
+          // Center glyph in cell
+          const xOffset = Math.max(0, Math.floor((charWidth - glyph.width) / 2) + glyph.left);
+          const yOffset = Math.max(0, Math.floor((charHeight - glyph.height) / 2));
+
+          // Convert 8-bit grayscale to 1-bit packed
+          for (let glyphY = 0; glyphY < glyph.height; glyphY++) {
+            const cellY = yOffset + glyphY;
+            if (cellY >= charHeight) continue;
+
+            for (let glyphX = 0; glyphX < glyph.width; glyphX++) {
+              const cellX = xOffset + glyphX;
+              if (cellX >= charWidth || cellX < 0) continue;
+
+              const srcIdx = glyphY * glyph.width + glyphX;
+              const gray = glyph.data[srcIdx];
+
+              // Threshold at 128 for 1-bit
+              if (gray >= 128) {
+                const byteIdx = offset + cellY * bytesPerRow + Math.floor(cellX / 8);
+                const bitIdx = 7 - (cellX % 8);
+                buffer[byteIdx] |= (1 << bitIdx);
+              }
+            }
+          }
+        }
+
+        rendered++;
+        const percent = Math.floor((rendered / total) * 100);
+        if (percent !== lastPercent && percent % 10 === 0) {
+          process.stdout.write(`\r  ${label} (${percent}%)`);
+          lastPercent = percent;
+        }
+      }
+    }
+    process.stdout.write("\r" + " ".repeat(80) + "\r");
+
+    // Generate output filename: FontName_size_WxH.bin
+    const fontName = path.basename(fontPath).replace(/\.(ttf|otf|ttc)$/i, "").replace(/[^a-zA-Z0-9]/g, "");
+    const outputFilename = `${fontName}_${size}_${charWidth}x${charHeight}.bin`;
+    const fullOutputPath = path.join(outputPath, outputFilename);
+
+    fs.mkdirSync(path.dirname(fullOutputPath), { recursive: true });
+    fs.writeFileSync(fullOutputPath, buffer);
+    console.log(`  Created: ${fullOutputPath} (${(buffer.length / 1024 / 1024).toFixed(1)} MB)`);
+
+    return true;
+  } catch (error) {
+    console.error(`  Error: ${error.message}`);
+    return false;
+  }
+}
+
 function main() {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
@@ -544,6 +678,7 @@ function main() {
       "cjk-common": { type: "boolean", default: false },
       "cjk-2500": { type: "boolean", default: false },
       header: { type: "boolean", default: false },
+      bin: { type: "boolean", default: false },
       var: { type: "string", multiple: true },
       preview: { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
@@ -568,6 +703,7 @@ Options:
   --cjk-common   Use full CJK (20,992) + Hangul (11,172), reduced fullwidth
   --cjk-2500     Use minimal CJK (~2500 chars): Joyo kanji + kana + punctuation
   --header       Output C header file instead of binary .epdfont
+  --bin          Output raw .bin format for ExternalFont (direct Unicode indexing)
   --var          Variable font axis value (e.g., --var wght=700 --var wdth=100)
   --preview      Generate HTML preview of rendered glyphs
   -h, --help     Show this help message
@@ -576,6 +712,7 @@ Examples:
   node convert-fonts.mjs my-font -r MyFont-Regular.ttf -b MyFont-Bold.ttf -i MyFont-Italic.ttf
   node convert-fonts.mjs roboto -r Roboto-VariableFont_wdth,wght.ttf --var wght=400
   node convert-fonts.mjs noto-sans-jp -r NotoSansJP-Regular.ttf --all-sizes --cjk-2500
+  node convert-fonts.mjs NotoSansCJK -r NotoSansSC-Regular.ttf --bin --size 24 --cjk-common
 `);
     process.exit(0);
   }
@@ -622,11 +759,33 @@ Examples:
     }
   }
 
-  const { output: outputBase, "2bit": is2Bit, header: outputHeader, preview: doPreview } = values;
+  const { output: outputBase, "2bit": is2Bit, header: outputHeader, bin: outputBin, preview: doPreview } = values;
   const baseSize = parseInt(values.size, 10);
   if (isNaN(baseSize) || baseSize <= 0) {
     console.error("Error: Invalid font size");
     process.exit(1);
+  }
+
+  // Handle --bin mode (direct Unicode indexed format for ExternalFont)
+  if (outputBin) {
+    console.log(`Converting to .bin format: ${family}`);
+    console.log(`Output directory: ${outputBase}`);
+    console.log(`Font size: ${baseSize}pt`);
+    if (variations) console.log(`Variable font: ${Object.entries(variations).map(([k, v]) => `${k}=${v}`).join(", ")}`);
+    console.log();
+
+    // Use CJK intervals for .bin format
+    const binIntervals = values["cjk-common"] ? INTERVALS_BIN_CJK : intervals;
+
+    const success = convertFontToBin(values.regular, outputBase, baseSize, binIntervals, variations);
+
+    if (success) {
+      console.log("\nTo use this font:");
+      console.log("1. Copy the .bin file to /config/fonts/ on your SD card");
+      console.log("2. Load in app: FONT_MANAGER.loadExternalFont(\"filename.bin\");");
+    }
+
+    process.exit(success ? 0 : 1);
   }
 
   console.log(`Converting font family: ${family}`);
