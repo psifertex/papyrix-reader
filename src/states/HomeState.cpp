@@ -8,9 +8,11 @@
 #include <Markdown.h>
 #include <SDCardManager.h>
 #include <Txt.h>
+#include <esp_system.h>
 
 #include "../config.h"
 #include "../content/ContentTypes.h"
+#include "../core/BootMode.h"
 #include "../core/Core.h"
 #include "Battery.h"
 #include "MappedInputManager.h"
@@ -153,9 +155,11 @@ StateTransition HomeState::update(Core& core) {
           case Button::Center:
             // Confirm selection
             if (view_.selected == 0 && view_.hasBook) {
-              // Continue Reading
-              core.buf.text[0] = 'H';  // Mark as coming from Home
-              return StateTransition::to(StateId::Reader);
+              // Continue Reading - transition to Reader mode via restart
+              showTransitionNotification("Opening book...");
+              saveTransition(BootMode::READER, core.buf.path, ReturnTo::HOME);
+              vTaskDelay(50 / portTICK_PERIOD_MS);
+              ESP.restart();
             } else if (view_.selected == 1) {
               // Files
               return StateTransition::to(StateId::FileList);

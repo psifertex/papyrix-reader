@@ -5,10 +5,12 @@
 #include <FsHelpers.h>
 #include <GfxRenderer.h>
 #include <SDCardManager.h>
+#include <esp_system.h>
 
 #include <algorithm>
 #include <cstring>
 
+#include "../core/BootMode.h"
 #include "../core/Core.h"
 #include "../ui/Elements.h"
 #include "MappedInputManager.h"
@@ -44,9 +46,9 @@ void FileListState::setDirectory(const char* dir) {
 void FileListState::enter(Core& core) {
   Serial.printf("[FILES] Entering, dir: %s\n", currentDir_);
 
-  // Preserve position when returning from Reader, reset otherwise
-  bool preservePosition = (core.buf.text[0] == 'R');
-  core.buf.text[0] = '\0';  // Clear flag
+  // Preserve position when returning from Reader via boot transition
+  const auto& transition = getTransition();
+  bool preservePosition = transition.isValid() && transition.returnTo == ReturnTo::FILE_MANAGER;
 
   if (!preservePosition) {
     selectedIndex_ = 0;
@@ -354,12 +356,12 @@ void FileListState::openSelected(Core& core) {
     loadFiles(core);
     needsRender_ = true;
   } else {
-    // Select file - copy to shared buffer for ReaderState
-    strncpy(core.buf.path, selectedPath_, sizeof(core.buf.path) - 1);
-    core.buf.path[sizeof(core.buf.path) - 1] = '\0';
-    core.buf.text[0] = 'F';  // Mark as coming from FileList
-    hasSelection_ = true;
+    // Select file - transition to Reader mode via restart
     Serial.printf("[FILES] Selected: %s\n", selectedPath_);
+    showTransitionNotification("Opening book...");
+    saveTransition(BootMode::READER, selectedPath_, ReturnTo::FILE_MANAGER);
+    vTaskDelay(50 / portTICK_PERIOD_MS);
+    ESP.restart();
   }
 }
 

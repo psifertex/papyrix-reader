@@ -98,6 +98,7 @@ class ReaderState : public State {
 
   // Cache management
   bool ensurePageCached(Core& core, uint16_t pageNum);
+  void loadCacheFromDisk(Core& core);
   void createOrExtendCache(Core& core);
 
   // Display helpers
@@ -128,6 +129,9 @@ class ReaderState : public State {
   void populateTocView(Core& core);
   int findCurrentTocEntry(Core& core);
   void jumpToTocEntry(Core& core, int tocIndex);
+
+  // Boot mode transition - exit to UI via restart
+  void exitToUI(Core& core);
 };
 
 }  // namespace papyrix

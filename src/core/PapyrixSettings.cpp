@@ -16,7 +16,7 @@ namespace {
 // Version 3: Removed showBookDetails (now always enabled)
 constexpr uint8_t SETTINGS_FILE_VERSION = 3;
 // Increment this when adding new persisted settings fields
-constexpr uint8_t SETTINGS_COUNT = 16;
+constexpr uint8_t SETTINGS_COUNT = 18;
 }  // namespace
 
 Result<void> Settings::save(drivers::Storage& storage) const {
@@ -49,6 +49,8 @@ Result<void> Settings::save(drivers::Storage& storage) const {
   // Write themeName as fixed-length string
   outputFile.write(reinterpret_cast<const uint8_t*>(themeName), sizeof(themeName));
   outputFile.write(reinterpret_cast<const uint8_t*>(lastBookPath), sizeof(lastBookPath));
+  serialization::writePod(outputFile, pendingTransition);
+  serialization::writePod(outputFile, transitionReturnTo);
   outputFile.close();
 
   Serial.printf("[%lu] [SET] Settings saved to file\n", millis());
@@ -112,6 +114,10 @@ Result<void> Settings::load(drivers::Storage& storage) {
     inputFile.read(reinterpret_cast<uint8_t*>(lastBookPath), sizeof(lastBookPath));
     lastBookPath[sizeof(lastBookPath) - 1] = '\0';
     if (++settingsRead >= fileSettingsCount) break;
+    serialization::readPodValidated(inputFile, pendingTransition, uint8_t(2));
+    if (++settingsRead >= fileSettingsCount) break;
+    serialization::readPodValidated(inputFile, transitionReturnTo, uint8_t(1));
+    if (++settingsRead >= fileSettingsCount) break;
   } while (false);
 
   inputFile.close();
@@ -163,6 +169,8 @@ bool Settings::saveToFile() const {
   serialization::writePod(outputFile, startupBehavior);
   outputFile.write(reinterpret_cast<const uint8_t*>(themeName), sizeof(themeName));
   outputFile.write(reinterpret_cast<const uint8_t*>(lastBookPath), sizeof(lastBookPath));
+  serialization::writePod(outputFile, pendingTransition);
+  serialization::writePod(outputFile, transitionReturnTo);
   outputFile.close();
 
   Serial.printf("[%lu] [SET] Settings saved to file\n", millis());
@@ -221,6 +229,10 @@ bool Settings::loadFromFile() {
     if (++settingsRead >= fileSettingsCount) break;
     inputFile.read(reinterpret_cast<uint8_t*>(lastBookPath), sizeof(lastBookPath));
     lastBookPath[sizeof(lastBookPath) - 1] = '\0';
+    if (++settingsRead >= fileSettingsCount) break;
+    serialization::readPodValidated(inputFile, pendingTransition, uint8_t(2));
+    if (++settingsRead >= fileSettingsCount) break;
+    serialization::readPodValidated(inputFile, transitionReturnTo, uint8_t(1));
     if (++settingsRead >= fileSettingsCount) break;
   } while (false);
 

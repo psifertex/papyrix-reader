@@ -8,6 +8,7 @@
 #include <MarkdownParser.h>
 #include <PageCache.h>
 #include <PlainTextParser.h>
+#include <esp_system.h>
 
 #include <cstring>
 
@@ -15,6 +16,7 @@
 #include "../config.h"
 #include "../content/ProgressManager.h"
 #include "../content/ReaderNavigation.h"
+#include "../core/BootMode.h"
 #include "../core/Core.h"
 #include "../ui/Elements.h"
 #include "ThemeManager.h"
@@ -78,9 +80,10 @@ void ReaderState::enter(Core& core) {
     core.buf.path[0] = '\0';
   }
 
-  // Determine source state from navigation flag
-  sourceState_ = (core.buf.text[0] == 'F') ? StateId::FileList : StateId::Home;
-  core.buf.text[0] = '\0';  // Clear flag
+  // Determine source state from boot transition
+  const auto& transition = getTransition();
+  sourceState_ =
+      (transition.isValid() && transition.returnTo == ReturnTo::FILE_MANAGER) ? StateId::FileList : StateId::Home;
 
   Serial.printf("[READER] Entering with path: %s\n", contentPath_);
 
@@ -235,10 +238,9 @@ StateTransition ReaderState::update(Core& core) {
             }
             break;
           case Button::Back:
-            if (sourceState_ == StateId::FileList) {
-              core.buf.text[0] = 'R';  // Signal "returning" to FileList
-            }
-            return StateTransition::to(sourceState_);
+            exitToUI(core);
+            // Won't reach here after restart
+            return StateTransition::stay(StateId::Reader);
           case Button::Power:
             break;
         }
@@ -404,27 +406,26 @@ void ReaderState::renderCachedPage(Core& core) {
     if (cacheTaskComplete_) {
       Serial.println("[READER] Using cache from background task");
     } else {
-      // Background task not done - show overlay and wait
-      renderer_.clearScreen(theme.backgroundColor);
+      // Try to load existing cache silently first
+      loadCacheFromDisk(core);
 
-      // Show overlay box (don't clear entire screen)
-      constexpr int boxMargin = 20;
-      const int fontId = core.settings.getReaderFontId(theme);
-      const int textWidth = renderer_.getTextWidth(fontId, "Indexing...");
-      const int boxWidth = textWidth + boxMargin * 2;
-      const int boxHeight = renderer_.getLineHeight(fontId) + boxMargin * 2;
-      const int boxX = (renderer_.getScreenWidth() - boxWidth) / 2;
-      constexpr int boxY = 50;
+      // Check if current page is now cached
+      xSemaphoreTake(cacheMutex_, portMAX_DELAY);
+      bool pageIsCached =
+          pageCache_ && currentSectionPage_ >= 0 && currentSectionPage_ < static_cast<int>(pageCache_->pageCount());
+      xSemaphoreGive(cacheMutex_);
 
-      renderer_.fillRect(boxX, boxY, boxWidth, boxHeight, !theme.primaryTextBlack);
-      renderer_.drawText(fontId, boxX + boxMargin, boxY + boxMargin, "Indexing...", theme.primaryTextBlack);
-      renderer_.drawRect(boxX + 5, boxY + 5, boxWidth - 10, boxHeight - 10, theme.primaryTextBlack);
-      renderer_.displayBuffer();
+      if (!pageIsCached) {
+        // Current page not cached - show "Indexing..." and create/extend
+        renderer_.clearScreen(theme.backgroundColor);
+        ui::overlayBox(renderer_, theme, core.settings.getReaderFontId(theme), 50, "Indexing...");
+        renderer_.displayBuffer();
 
-      createOrExtendCache(core);
+        createOrExtendCache(core);
 
-      // Clear overlay
-      renderer_.clearScreen(theme.backgroundColor);
+        // Clear overlay
+        renderer_.clearScreen(theme.backgroundColor);
+      }
     }
 
     // Clamp page number (handle negative values and out-of-bounds)
@@ -524,9 +525,7 @@ bool ReaderState::ensurePageCached(Core& core, uint16_t pageNum) {
   Serial.printf("[READER] Extending cache for page %d\n", pageNum);
 
   const Theme& theme = THEME_MANAGER.current();
-  renderer_.clearScreen(theme.backgroundColor);
-  renderer_.drawCenteredText(core.settings.getReaderFontId(theme), 300, "Loading...", theme.primaryTextBlack, BOLD);
-  renderer_.displayBuffer();
+  ui::centeredMessage(renderer_, theme, core.settings.getReaderFontId(theme), "Loading...");
 
   createOrExtendCache(core);
 
@@ -535,6 +534,39 @@ bool ReaderState::ensurePageCached(Core& core, uint16_t pageNum) {
   xSemaphoreGive(cacheMutex_);
 
   return pageNum < pageCount;
+}
+
+void ReaderState::loadCacheFromDisk(Core& core) {
+  const Theme& theme = THEME_MANAGER.current();
+  ContentType type = core.content.metadata().type;
+
+  const auto vp = getReaderViewport();
+  const auto config = core.settings.getRenderConfig(theme, vp.width, vp.height);
+
+  std::string cachePath;
+  if (type == ContentType::Epub) {
+    auto* provider = core.content.asEpub();
+    if (!provider || !provider->getEpub()) {
+      Serial.println("[READER] loadCacheFromDisk: no epub provider");
+      return;
+    }
+    auto epub = provider->getEpubShared();
+    cachePath = epub->getCachePath() + "/sections/" + std::to_string(currentSpineIndex_) + ".bin";
+  } else if (type == ContentType::Markdown || type == ContentType::Txt) {
+    cachePath = std::string(core.content.cacheDir()) + "/pages.bin";
+  } else {
+    Serial.printf("[READER] loadCacheFromDisk: unsupported content type %d\n", static_cast<int>(type));
+    return;
+  }
+
+  xSemaphoreTake(cacheMutex_, portMAX_DELAY);
+  if (!pageCache_) {
+    pageCache_.reset(new PageCache(cachePath));
+    if (!pageCache_->load(config)) {
+      pageCache_.reset();
+    }
+  }
+  xSemaphoreGive(cacheMutex_);
 }
 
 void ReaderState::createOrExtendCache(Core& core) {
@@ -1022,6 +1054,45 @@ void ReaderState::renderTocOverlay(Core& core) {
 
   renderer_.displayBuffer();
   core.display.markDirty();
+}
+
+void ReaderState::exitToUI(Core& core) {
+  Serial.println("[READER] Exiting to UI mode via restart");
+
+  // Stop background caching first
+  stopBackgroundCaching();
+
+  // Save progress at last rendered position
+  if (contentLoaded_) {
+    ProgressManager::Progress progress;
+    progress.spineIndex = (lastRenderedSectionPage_ == -1) ? 0 : lastRenderedSpineIndex_;
+    progress.sectionPage = (lastRenderedSectionPage_ == -1) ? 0 : lastRenderedSectionPage_;
+    progress.flatPage = currentPage_;
+    ProgressManager::save(core, core.content.cacheDir(), core.content.metadata().type, progress);
+
+    // Close content
+    xSemaphoreTake(cacheMutex_, portMAX_DELAY);
+    pageCache_.reset();
+    xSemaphoreGive(cacheMutex_);
+    core.content.close();
+  }
+
+  // Determine return destination from cached transition or fall back to sourceState_
+  ReturnTo returnTo = ReturnTo::HOME;
+  const auto& transition = getTransition();
+  if (transition.isValid()) {
+    returnTo = transition.returnTo;
+  } else if (sourceState_ == StateId::FileList) {
+    returnTo = ReturnTo::FILE_MANAGER;
+  }
+
+  // Show notification and restart
+  showTransitionNotification("Returning to library...");
+  saveTransition(BootMode::UI, nullptr, returnTo);
+
+  // Brief delay to ensure SD writes complete before restart
+  vTaskDelay(50 / portTICK_PERIOD_MS);
+  ESP.restart();
 }
 
 }  // namespace papyrix

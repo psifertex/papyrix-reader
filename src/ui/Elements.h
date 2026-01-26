@@ -95,6 +95,9 @@ void centeredText(const GfxRenderer& r, const Theme& t, int y, const char* str);
 // Centered message - Bold centered message (for loading/error screens)
 void centeredMessage(const GfxRenderer& r, const Theme& t, int fontId, const char* message);
 
+// Overlay box - Centered notification box with text (for Indexing/Loading messages)
+void overlayBox(const GfxRenderer& r, const Theme& t, int fontId, int y, const char* message);
+
 // Two-column row - Label on left, value on right
 void twoColumnRow(const GfxRenderer& r, const Theme& t, int y, const char* label, const char* value);
 

@@ -330,22 +330,14 @@ void SettingsState::handleConfirm(Core& core) {
       if (confirmView_.isYesSelected()) {
         if (pendingAction_ == 10) {
           // Clear Book Cache
-          renderer_.clearScreen(THEME.backgroundColor);
-          renderer_.drawCenteredText(THEME.uiFontId, renderer_.getScreenHeight() / 2, "Clearing cache...",
-                                     THEME.primaryTextBlack);
-          renderer_.displayBuffer();
+          ui::centeredMessage(renderer_, THEME, THEME.uiFontId, "Clearing cache...");
 
-          // Clear entire cache directory
           auto result = core.storage.rmdir(PAPYRIX_CACHE_DIR);
 
-          // Show result briefly
-          renderer_.clearScreen(THEME.backgroundColor);
           const char* msg = result.ok() ? "Cache cleared" : "No cache to clear";
-          renderer_.drawCenteredText(THEME.uiFontId, renderer_.getScreenHeight() / 2, msg, THEME.primaryTextBlack);
-          renderer_.displayBuffer();
+          ui::centeredMessage(renderer_, THEME, THEME.uiFontId, msg);
           vTaskDelay(1500 / portTICK_PERIOD_MS);
 
-          // Return to menu
           pendingAction_ = 0;
           currentScreen_ = SettingsScreen::Cleanup;
           cleanupView_.needsRender = true;
@@ -353,34 +345,22 @@ void SettingsState::handleConfirm(Core& core) {
 
         } else if (pendingAction_ == 11) {
           // Clear Device Storage
-          renderer_.clearScreen(THEME.backgroundColor);
-          renderer_.drawCenteredText(THEME.uiFontId, renderer_.getScreenHeight() / 2, "Clearing device storage...",
-                                     THEME.primaryTextBlack);
-          renderer_.displayBuffer();
+          ui::centeredMessage(renderer_, THEME, THEME.uiFontId, "Clearing device storage...");
 
           LittleFS.format();
 
-          renderer_.clearScreen(THEME.backgroundColor);
-          renderer_.drawCenteredText(THEME.uiFontId, renderer_.getScreenHeight() / 2, "Done. Restarting...",
-                                     THEME.primaryTextBlack);
-          renderer_.displayBuffer();
+          ui::centeredMessage(renderer_, THEME, THEME.uiFontId, "Done. Restarting...");
           vTaskDelay(1000 / portTICK_PERIOD_MS);
           ESP.restart();
 
         } else if (pendingAction_ == 12) {
           // Factory Reset
-          renderer_.clearScreen(THEME.backgroundColor);
-          renderer_.drawCenteredText(THEME.uiFontId, renderer_.getScreenHeight() / 2, "Resetting device...",
-                                     THEME.primaryTextBlack);
-          renderer_.displayBuffer();
+          ui::centeredMessage(renderer_, THEME, THEME.uiFontId, "Resetting device...");
 
           LittleFS.format();
           core.storage.rmdir(PAPYRIX_DIR);
 
-          renderer_.clearScreen(THEME.backgroundColor);
-          renderer_.drawCenteredText(THEME.uiFontId, renderer_.getScreenHeight() / 2, "Done. Restarting...",
-                                     THEME.primaryTextBlack);
-          renderer_.displayBuffer();
+          ui::centeredMessage(renderer_, THEME, THEME.uiFontId, "Done. Restarting...");
           vTaskDelay(1000 / portTICK_PERIOD_MS);
           ESP.restart();
         }

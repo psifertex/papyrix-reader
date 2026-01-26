@@ -30,6 +30,7 @@
 #include "config.h"
 
 // New refactored core system
+#include "core/BootMode.h"
 #include "core/Core.h"
 #include "core/StateMachine.h"
 #include "images/PapyrixLogo.h"
@@ -237,7 +238,12 @@ void showErrorScreen(const char* message) {
   renderer.displayBuffer();
 }
 
-void setup() {
+// Track current boot mode for loop behavior
+static papyrix::BootMode currentBootMode = papyrix::BootMode::UI;
+
+// Early initialization - common to both boot modes
+// Returns false if critical initialization failed
+bool earlyInit() {
   // Only start serial if USB connected
   pinMode(UART0_RXD, INPUT);
   gpio_deep_sleep_hold_dis();  // Release GPIO hold from deep sleep to allow fresh readings
@@ -255,7 +261,7 @@ void setup() {
     verifyWakeupLongPress();
   }
 
-  Serial.printf("[%lu] [   ] Starting CrossPoint version " PAPYRIX_VERSION "\n", millis());
+  Serial.printf("[%lu] [   ] Starting Papyrix version " PAPYRIX_VERSION "\n", millis());
 
   // Initialize battery ADC pin with proper attenuation for 0-3.3V range
   analogSetPinAttenuation(BAT_GPIO0, ADC_11db);
@@ -263,14 +269,15 @@ void setup() {
   // Initialize SPI with custom pins
   SPI.begin(EPD_SCLK, SD_SPI_MISO, EPD_MOSI, EPD_CS);
 
-  // SD Card Initialization
+  // SD Card Initialization - critical
   if (!SdMan.begin()) {
     Serial.printf("[%lu] [   ] SD card initialization failed\n", millis());
     setupDisplayAndFonts();
     showErrorScreen("SD card error");
-    return;
+    return false;
   }
 
+  // Load settings early (needed for theme/font decisions)
   papyrix::core.settings.loadFromFile();
   rtcPowerButtonDurationMs = papyrix::core.settings.getPowerButtonDuration();
 
@@ -280,23 +287,32 @@ void setup() {
     if (!LittleFS.format() || !LittleFS.begin(false)) {
       Serial.printf("[%lu] [FS] LittleFS recovery failed\n", millis());
       showErrorScreen("Internal storage error");
-      return;
+      return false;
     }
     Serial.printf("[%lu] [FS] LittleFS formatted and mounted\n", millis());
   } else {
     Serial.printf("[%lu] [FS] LittleFS mounted\n", millis());
   }
 
-  // Initialize theme and font managers
+  return true;
+}
+
+// Initialize UI mode - full state registration, all resources
+void initUIMode() {
+  Serial.printf("[%lu] [BOOT] Initializing UI mode\n", millis());
+  Serial.printf("[%lu] [BOOT] [UI mode] Free heap: %lu, Max block: %lu\n", millis(), ESP.getFreeHeap(),
+                ESP.getMaxAllocHeap());
+
+  // Initialize theme and font managers (full)
   FONT_MANAGER.init(renderer);
   THEME_MANAGER.loadTheme(papyrix::core.settings.themeName);
-  THEME_MANAGER.createDefaultThemeFiles();  // Create template files if missing
+  THEME_MANAGER.createDefaultThemeFiles();
   Serial.printf("[%lu] [   ] Theme loaded: %s\n", millis(), THEME_MANAGER.currentThemeName());
 
   setupDisplayAndFonts();
   applyThemeFonts();
 
-  // Show boot splash (after fonts ready - matches old BootActivity sequence)
+  // Show boot splash
   {
     ui::BootView bootView;
     bootView.setLogo(PapyrixLogo, 128, 128);
@@ -305,7 +321,7 @@ void setup() {
     ui::render(renderer, THEME, bootView);
   }
 
-  // Register all states
+  // Register ALL states for UI mode
   stateMachine.registerState(&startupState);
   stateMachine.registerState(&homeState);
   stateMachine.registerState(&fileListState);
@@ -314,41 +330,107 @@ void setup() {
   stateMachine.registerState(&sleepState);
   stateMachine.registerState(&errorState);
 
-  // Initialize core and start state machine
+  // Initialize core
   auto result = papyrix::core.init();
   if (!result.ok()) {
     Serial.printf("[%lu] [CORE] Init failed: %s\n", millis(), papyrix::errorToString(result.err));
     showErrorScreen("Core init failed");
+    return;
+  }
+
+  Serial.printf("[%lu] [CORE] State machine starting (UI mode)\n", millis());
+  mappedInputManager.setSettings(&papyrix::core.settings);
+
+  // Determine initial state - check for return from reader mode
+  papyrix::StateId initialState = papyrix::StateId::Home;
+  const auto& transition = papyrix::getTransition();
+
+  if (transition.returnTo == papyrix::ReturnTo::FILE_MANAGER) {
+    initialState = papyrix::StateId::FileList;
+    Serial.printf("[%lu] [BOOT] Returning to FileList from Reader\n", millis());
   } else {
-    Serial.printf("[%lu] [CORE] State machine starting\n", millis());
-    // Connect MappedInputManager to settings for side button layout
-    mappedInputManager.setSettings(&papyrix::core.settings);
+    Serial.printf("[%lu] [BOOT] Starting at Home\n", millis());
+  }
 
-    // Determine initial state based on startup behavior setting
-    papyrix::StateId initialState = papyrix::StateId::Home;
+  stateMachine.init(papyrix::core, initialState);
 
-    if (papyrix::core.settings.startupBehavior == papyrix::Settings::StartupLastDocument &&
-        papyrix::core.settings.lastBookPath[0] != '\0' && SdMan.exists(papyrix::core.settings.lastBookPath)) {
-      // Copy path to shared buffer for ReaderState to consume
-      strncpy(papyrix::core.buf.path, papyrix::core.settings.lastBookPath, sizeof(papyrix::core.buf.path) - 1);
-      papyrix::core.buf.path[sizeof(papyrix::core.buf.path) - 1] = '\0';
+  // Force initial render
+  Serial.printf("[%lu] [CORE] Forcing initial render\n", millis());
+  stateMachine.update(papyrix::core);
 
-      // Clear lastBookPath before attempting to open - prevents boot loop if file fails to load.
-      // ReaderState will re-save the path after successfully opening the content.
-      papyrix::core.settings.lastBookPath[0] = '\0';
-      papyrix::core.settings.saveToFile();
+  Serial.printf("[%lu] [BOOT] [UI mode] After init - Free heap: %lu, Max block: %lu\n", millis(), ESP.getFreeHeap(),
+                ESP.getMaxAllocHeap());
+}
 
-      initialState = papyrix::StateId::Reader;
-      Serial.printf("[%lu] [CORE] Starting with last document: %s\n", millis(), papyrix::core.buf.path);
-    }
+// Initialize Reader mode - minimal state registration, single font size
+void initReaderMode() {
+  Serial.printf("[%lu] [BOOT] Initializing READER mode\n", millis());
+  Serial.printf("[%lu] [BOOT] [READER mode] Free heap: %lu, Max block: %lu\n", millis(), ESP.getFreeHeap(),
+                ESP.getMaxAllocHeap());
 
-    stateMachine.init(papyrix::core, initialState);
+  // Initialize theme and font managers (minimal - no cache)
+  FONT_MANAGER.init(renderer);
+  THEME_MANAGER.loadTheme(papyrix::core.settings.themeName);
+  // Skip createDefaultThemeFiles() - not needed in reader mode
+  Serial.printf("[%lu] [   ] Theme loaded: %s (reader mode)\n", millis(), THEME_MANAGER.currentThemeName());
 
-    // CRITICAL: Force initial render immediately after state machine init
-    // This matches the old behavior where the next activity's onEnter() rendered immediately
-    // Without this, the first render is deferred to the loop, which can cause display issues
-    Serial.printf("[%lu] [CORE] Forcing initial render\n", millis());
-    stateMachine.update(papyrix::core);
+  setupDisplayAndFonts();
+  applyThemeFonts();
+
+  // Register ONLY states needed for Reader mode
+  stateMachine.registerState(&readerState);
+  stateMachine.registerState(&sleepState);
+  stateMachine.registerState(&errorState);
+
+  // Initialize core
+  auto result = papyrix::core.init();
+  if (!result.ok()) {
+    Serial.printf("[%lu] [CORE] Init failed: %s\n", millis(), papyrix::errorToString(result.err));
+    showErrorScreen("Core init failed");
+    return;
+  }
+
+  Serial.printf("[%lu] [CORE] State machine starting (READER mode)\n", millis());
+  mappedInputManager.setSettings(&papyrix::core.settings);
+
+  // Get book path from transition
+  const auto& transition = papyrix::getTransition();
+
+  if (transition.bookPath[0] != '\0') {
+    // Copy path to shared buffer for ReaderState to consume
+    strncpy(papyrix::core.buf.path, transition.bookPath, sizeof(papyrix::core.buf.path) - 1);
+    papyrix::core.buf.path[sizeof(papyrix::core.buf.path) - 1] = '\0';
+    Serial.printf("[%lu] [BOOT] Opening book: %s\n", millis(), papyrix::core.buf.path);
+  } else {
+    // No book path - fall back to UI mode to avoid boot loop
+    Serial.printf("[%lu] [BOOT] ERROR: No book path in transition, falling back to UI\n", millis());
+    initUIMode();
+    return;
+  }
+
+  stateMachine.init(papyrix::core, papyrix::StateId::Reader);
+
+  // Force initial render
+  Serial.printf("[%lu] [CORE] Forcing initial render\n", millis());
+  stateMachine.update(papyrix::core);
+
+  Serial.printf("[%lu] [BOOT] [READER mode] After init - Free heap: %lu, Max block: %lu\n", millis(), ESP.getFreeHeap(),
+                ESP.getMaxAllocHeap());
+}
+
+void setup() {
+  // Early initialization (common to both modes)
+  if (!earlyInit()) {
+    return;  // Critical failure
+  }
+
+  // Detect boot mode from RTC memory or settings
+  currentBootMode = papyrix::detectBootMode();
+
+  if (currentBootMode == papyrix::BootMode::READER) {
+    initReaderMode();
+  } else {
+    initUIMode();
   }
 
   // Ensure we're not still holding the power button before leaving setup

@@ -7,6 +7,11 @@
 namespace papyrix {
 
 void StateMachine::init(Core& core, StateId initialState) {
+  // Exit current state if one exists (e.g., when triggering sleep from any state)
+  if (current_) {
+    current_->exit(core);
+  }
+
   currentId_ = initialState;
   current_ = getState(initialState);
 

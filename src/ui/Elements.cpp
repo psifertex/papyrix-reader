@@ -526,8 +526,21 @@ void centeredText(const GfxRenderer& r, const Theme& t, int y, const char* str) 
 
 void centeredMessage(const GfxRenderer& r, const Theme& t, int fontId, const char* message) {
   r.clearScreen(t.backgroundColor);
-  r.drawCenteredText(fontId, 300, message, t.primaryTextBlack, EpdFontFamily::BOLD);
+  const int y = r.getScreenHeight() / 2 - r.getLineHeight(fontId) / 2;
+  r.drawCenteredText(fontId, y, message, t.primaryTextBlack, EpdFontFamily::BOLD);
   r.displayBuffer();
+}
+
+void overlayBox(const GfxRenderer& r, const Theme& t, int fontId, int y, const char* message) {
+  constexpr int boxMargin = 20;
+  const int textWidth = r.getTextWidth(fontId, message);
+  const int boxWidth = textWidth + boxMargin * 2;
+  const int boxHeight = r.getLineHeight(fontId) + boxMargin * 2;
+  const int boxX = (r.getScreenWidth() - boxWidth) / 2;
+
+  r.fillRect(boxX, y, boxWidth, boxHeight, !t.primaryTextBlack);
+  r.drawText(fontId, boxX + boxMargin, y + boxMargin, message, t.primaryTextBlack);
+  r.drawRect(boxX + 5, y + 5, boxWidth - 10, boxHeight - 10, t.primaryTextBlack);
 }
 
 void twoColumnRow(const GfxRenderer& r, const Theme& t, int y, const char* label, const char* value) {

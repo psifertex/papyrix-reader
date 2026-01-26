@@ -70,7 +70,9 @@ struct Settings {
   uint8_t startupBehavior = StartupLastDocument;
   uint8_t coverDithering = 0;
   char themeName[32] = "light";
-  char lastBookPath[256] = "";  // Path to last opened book
+  char lastBookPath[256] = "";     // Path to last opened book
+  uint8_t pendingTransition = 0;   // 0=none, 1=UI, 2=Reader
+  uint8_t transitionReturnTo = 0;  // ReturnTo enum value (0=HOME, 1=FILE_MANAGER)
 
   // Persistence (using drivers::Storage wrapper)
   Result<void> load(drivers::Storage& storage);
