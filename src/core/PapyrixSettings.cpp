@@ -114,9 +114,9 @@ Result<void> Settings::load(drivers::Storage& storage) {
     inputFile.read(reinterpret_cast<uint8_t*>(lastBookPath), sizeof(lastBookPath));
     lastBookPath[sizeof(lastBookPath) - 1] = '\0';
     if (++settingsRead >= fileSettingsCount) break;
-    serialization::readPodValidated(inputFile, pendingTransition, uint8_t(2));
+    serialization::readPodValidated(inputFile, pendingTransition, uint8_t(3));
     if (++settingsRead >= fileSettingsCount) break;
-    serialization::readPodValidated(inputFile, transitionReturnTo, uint8_t(1));
+    serialization::readPodValidated(inputFile, transitionReturnTo, uint8_t(2));
     if (++settingsRead >= fileSettingsCount) break;
   } while (false);
 
@@ -230,9 +230,9 @@ bool Settings::loadFromFile() {
     inputFile.read(reinterpret_cast<uint8_t*>(lastBookPath), sizeof(lastBookPath));
     lastBookPath[sizeof(lastBookPath) - 1] = '\0';
     if (++settingsRead >= fileSettingsCount) break;
-    serialization::readPodValidated(inputFile, pendingTransition, uint8_t(2));
+    serialization::readPodValidated(inputFile, pendingTransition, uint8_t(3));
     if (++settingsRead >= fileSettingsCount) break;
-    serialization::readPodValidated(inputFile, transitionReturnTo, uint8_t(1));
+    serialization::readPodValidated(inputFile, transitionReturnTo, uint8_t(2));
     if (++settingsRead >= fileSettingsCount) break;
   } while (false);
 
