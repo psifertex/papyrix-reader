@@ -55,8 +55,8 @@
 #define PAPYRIX_WIFI_FILE PAPYRIX_DIR "/wifi.bin"
 
 // Thumbnail dimensions for home screen
-#define THUMB_WIDTH 240
-#define THUMB_HEIGHT 400
+#define THUMB_WIDTH 320
+#define THUMB_HEIGHT 440
 
 // User configuration directory
 #define CONFIG_DIR "/config"

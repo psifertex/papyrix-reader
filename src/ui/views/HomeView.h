@@ -11,15 +11,15 @@
 namespace ui {
 
 // ============================================================================
-// HomeView - Main home screen with current book and menu
+// HomeView - Main home screen with current book and direct action buttons
 // ============================================================================
 
 struct CardDimensions {
   int x, y, width, height;
 
   static CardDimensions calculate(int screenWidth, int screenHeight) {
-    const int w = screenWidth * 3 / 5;
-    const int h = screenHeight / 2 + 50;
+    const int w = screenWidth * 7 / 10;  // 70% width for larger cover
+    const int h = screenHeight / 2 + 100;
     const int x = (screenWidth - w) / 2;
     constexpr int y = 50;
     return {x, y, w, h};
@@ -30,11 +30,6 @@ struct HomeView {
   static constexpr int MAX_TITLE_LEN = 64;
   static constexpr int MAX_AUTHOR_LEN = 48;
   static constexpr int MAX_PATH_LEN = 128;
-
-  // Menu items: Files and Settings (horizontal grid at bottom)
-  // Selection: 0=BookCard, 1=Files, 2=Settings
-  static constexpr const char* const MENU_ITEMS[] = {"Files", "Settings"};
-  static constexpr int MENU_ITEM_COUNT = 2;
 
   // Current book info
   char bookTitle[MAX_TITLE_LEN] = {0};
@@ -51,7 +46,6 @@ struct HomeView {
   bool hasCoverBmp = false;
 
   // UI state
-  int8_t selected = 0;
   int8_t batteryPercent = 100;
   bool needsRender = true;
 
@@ -94,35 +88,7 @@ struct HomeView {
 
   void clear() {
     clearBook();
-    selected = 0;
     batteryPercent = 100;
-  }
-
-  // Max selection index: 0=BookCard, 1=Files, 2=Settings
-  static constexpr int MAX_SELECTION = 2;
-
-  void moveUp() {
-    if (selected > 0) {
-      selected--;
-      // Skip book card if no book
-      if (selected == 0 && !hasBook) {
-        selected = MAX_SELECTION;  // Wrap to Settings
-      }
-      needsRender = true;
-    } else {
-      selected = MAX_SELECTION;  // Wrap to Settings
-      needsRender = true;
-    }
-  }
-
-  void moveDown() {
-    if (selected < MAX_SELECTION) {
-      selected++;
-      needsRender = true;
-    } else {
-      selected = hasBook ? 0 : 1;  // Wrap to book or Files
-      needsRender = true;
-    }
   }
 };
 

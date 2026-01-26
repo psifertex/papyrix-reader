@@ -36,8 +36,6 @@ void HomeState::enter(Core& core) {
   // Update battery
   updateBattery();
 
-  // Start selection at book card if available, otherwise Files
-  view_.selected = view_.hasBook ? 0 : 1;
   view_.needsRender = true;
 }
 
@@ -126,53 +124,32 @@ StateTransition HomeState::update(Core& core) {
     switch (e.type) {
       case EventType::ButtonPress:
         switch (e.button) {
-          case Button::Up:
-          case Button::Left:
-            // Navigate: Settings(2) -> Files(1) -> Book(0) -> Settings(2)
-            if (view_.selected > 0) {
-              view_.selected--;
-              // Skip book card if no book
-              if (view_.selected == 0 && !view_.hasBook) {
-                view_.selected = 2;  // Wrap to Settings
-              }
-            } else {
-              view_.selected = 2;  // Wrap to Settings
-            }
-            view_.needsRender = true;
-            break;
-
-          case Button::Down:
-          case Button::Right:
-            // Navigate: Book(0) -> Files(1) -> Settings(2) -> Book(0)
-            if (view_.selected < 2) {
-              view_.selected++;
-            } else {
-              view_.selected = view_.hasBook ? 0 : 1;
-            }
-            view_.needsRender = true;
-            break;
-
-          case Button::Center:
-            // Confirm selection
-            if (view_.selected == 0 && view_.hasBook) {
-              // Continue Reading - transition to Reader mode via restart
+          case Button::Back:
+            // btn1: Read - Continue reading if book is open
+            if (view_.hasBook) {
               showTransitionNotification("Opening book...");
               saveTransition(BootMode::READER, core.buf.path, ReturnTo::HOME);
               vTaskDelay(50 / portTICK_PERIOD_MS);
               ESP.restart();
-            } else if (view_.selected == 1) {
-              // Files
-              return StateTransition::to(StateId::FileList);
-            } else if (view_.selected == 2) {
-              // Settings
-              return StateTransition::to(StateId::Settings);
             }
             break;
 
-          case Button::Back:
-            // Already at root - ignore or could go to sleep
-            break;
+          case Button::Center:
+            // btn2: Files
+            return StateTransition::to(StateId::FileList);
+
+          case Button::Left:
+            // btn3: Network
+            return StateTransition::to(StateId::Network);
+
+          case Button::Right:
+            // btn4: Settings
+            return StateTransition::to(StateId::Settings);
+
+          case Button::Up:
+          case Button::Down:
           case Button::Power:
+            // Side buttons unused on home screen
             break;
         }
         break;
@@ -233,12 +210,6 @@ void HomeState::render(Core& core) {
           coverRendered_ = true;
         }
       }
-    }
-
-    // Draw selection border if book card selected (always on top)
-    if (view_.selected == 0 && view_.hasBook) {
-      renderer_.drawRect(card.x + 1, card.y + 1, card.width - 2, card.height - 2, theme.primaryTextBlack);
-      renderer_.drawRect(card.x + 2, card.y + 2, card.width - 4, card.height - 4, theme.primaryTextBlack);
     }
   }
 

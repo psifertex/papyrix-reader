@@ -7,9 +7,6 @@
 
 namespace ui {
 
-// Static definitions for constexpr arrays
-constexpr const char* const HomeView::MENU_ITEMS[];
-
 void render(const GfxRenderer& r, const Theme& t, const HomeView& v) {
   // Only clear if no cover (HomeState handles clear when cover present)
   if (!v.hasCoverBmp) {
@@ -25,31 +22,19 @@ void render(const GfxRenderer& r, const Theme& t, const HomeView& v) {
   // Battery indicator - top right
   battery(r, t, pageWidth - 80, 10, v.batteryPercent);
 
-  // Book card dimensions (60% width, centered)
+  // Book card dimensions (70% width, centered)
   const auto card = CardDimensions::calculate(pageWidth, pageHeight);
   const int cardX = card.x;
   const int cardY = card.y;
   const int cardWidth = card.width;
   const int cardHeight = card.height;
 
-  const bool cardSelected = (v.selected == 0) && v.hasBook;
   const bool hasCover = v.coverData != nullptr || v.hasCoverBmp;
 
   if (v.hasBook) {
-    // Draw book card with selection border (skip if BMP cover present - HomeState drew it)
+    // Draw book card border (skip if BMP cover present - HomeState drew it)
     if (!v.hasCoverBmp) {
-      if (cardSelected) {
-        // Filled when selected (no cover image case)
-        if (!hasCover) {
-          r.fillRect(cardX, cardY, cardWidth, cardHeight, t.primaryTextBlack);
-        } else {
-          r.drawRect(cardX, cardY, cardWidth, cardHeight, t.primaryTextBlack);
-          r.drawRect(cardX + 1, cardY + 1, cardWidth - 2, cardHeight - 2, t.primaryTextBlack);
-          r.drawRect(cardX + 2, cardY + 2, cardWidth - 4, cardHeight - 4, t.primaryTextBlack);
-        }
-      } else {
-        r.drawRect(cardX, cardY, cardWidth, cardHeight, t.primaryTextBlack);
-      }
+      r.drawRect(cardX, cardY, cardWidth, cardHeight, t.primaryTextBlack);
     }
 
     // Draw cover image if available (in-memory version; BMP cover rendered by HomeState)
@@ -60,8 +45,8 @@ void render(const GfxRenderer& r, const Theme& t, const HomeView& v) {
       r.drawImage(v.coverData, coverX, coverY, v.coverWidth, v.coverHeight);
     }
 
-    // Text color based on selection (inverted if selected and no cover)
-    const bool textOnCard = (cardSelected && !hasCover) ? !t.primaryTextBlack : t.primaryTextBlack;
+    // Text color on card
+    const bool textOnCard = t.primaryTextBlack;
 
     // Title and author centered in card
     const int maxTextWidth = cardWidth - 40;
@@ -145,46 +130,29 @@ void render(const GfxRenderer& r, const Theme& t, const HomeView& v) {
     r.drawText(t.uiFontId, continueX, continueY, continueText, textOnCard);
 
   } else {
-    // No book open - show bordered placeholder
+    // No book open - show bordered placeholder with hint
     r.drawRect(cardX, cardY, cardWidth, cardHeight, t.primaryTextBlack);
+
+    const int lineHeight = r.getLineHeight(t.uiFontId);
+    const int centerY = cardY + cardHeight / 2;
 
     const char* noBookText = "No book open";
     const int noBookWidth = r.getTextWidth(t.uiFontId, noBookText);
     const int noBookX = cardX + (cardWidth - noBookWidth) / 2;
-    const int noBookY = cardY + cardHeight / 2 - r.getFontAscenderSize(t.uiFontId) / 2;
-    r.drawText(t.uiFontId, noBookX, noBookY, noBookText, t.primaryTextBlack);
+    r.drawText(t.uiFontId, noBookX, centerY - lineHeight, noBookText, t.primaryTextBlack);
+
+    const char* hintText = "Press \"Files\" to browse";
+    const int hintWidth = r.getTextWidth(t.uiFontId, hintText);
+    const int hintX = cardX + (cardWidth - hintWidth) / 2;
+    r.drawText(t.uiFontId, hintX, centerY + lineHeight / 2, hintText, t.secondaryTextBlack);
   }
 
-  // Grid 2x1 at bottom of page (Files, Settings)
-  // Aligned with button hints positions
-  constexpr int gridItemHeight = 50;
-  constexpr int buttonHintsY = 50;  // Distance from bottom for button hints
-  const int gridY = pageHeight - buttonHintsY - gridItemHeight - 10;
-
-  // Grid positions matching button hint layout
-  constexpr int gridPositions[] = {25, 245};
-  constexpr int gridItemWidth = 211;
-
-  for (int i = 0; i < HomeView::MENU_ITEM_COUNT; i++) {
-    const int itemX = gridPositions[i];
-    const bool isSelected = (v.selected == i + 1);  // +1 because 0 is book card
-
-    if (isSelected) {
-      r.fillRect(itemX, gridY, gridItemWidth, gridItemHeight, t.selectionFillBlack);
-    } else {
-      r.drawRect(itemX, gridY, gridItemWidth, gridItemHeight, t.primaryTextBlack);
-    }
-
-    // Draw centered text
-    const bool itemTextColor = isSelected ? t.selectionTextBlack : t.primaryTextBlack;
-    const int textWidth = r.getTextWidth(t.uiFontId, HomeView::MENU_ITEMS[i]);
-    const int textX = itemX + (gridItemWidth - textWidth) / 2;
-    const int textY = gridY + (gridItemHeight - r.getFontAscenderSize(t.uiFontId)) / 2;
-    r.drawText(t.uiFontId, textX, textY, HomeView::MENU_ITEMS[i], itemTextColor);
+  // Button hints - direct shortcuts (no menu navigation)
+  if (v.hasBook) {
+    buttonBar(r, t, "Read", "Files", "Network", "Settings");
+  } else {
+    buttonBar(r, t, "", "Files", "Network", "Settings");
   }
-
-  // Button hints
-  buttonBar(r, t, "", "Open", "Left", "Right");
 
   // Note: displayBuffer() is NOT called here; HomeState will call it
   // after rendering the cover image on top of the card area
