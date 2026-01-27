@@ -608,75 +608,64 @@ void twoColumnRow(const GfxRenderer& r, const Theme& t, int y, const char* label
 
 void readerStatusBar(const GfxRenderer& r, const Theme& t, int marginLeft, int marginRight, int marginBottom,
                      const ReaderStatusBarData& data) {
-  // StatusNone = 0, StatusNoProgress = 1, StatusFull = 2
-  const bool showProgress = (data.mode == 2);
-  const bool showBattery = (data.mode >= 1);
-  const bool showTitle = (data.mode >= 1);
-
   if (data.mode == 0) return;  // StatusNone
 
   const auto screenHeight = r.getScreenHeight();
   const auto screenWidth = r.getScreenWidth();
   const int textY = screenHeight - marginBottom + 2;
   int percentageTextWidth = 0;
-  int progressTextWidth = 0;
 
-  // 1. Progress (right side) - only in FULL mode
-  if (showProgress) {
-    char progressStr[32];
-    if (data.isPartial) {
-      snprintf(progressStr, sizeof(progressStr), "%d/-  %d%%", data.currentPage, data.progressPercent);
-    } else {
-      snprintf(progressStr, sizeof(progressStr), "%d/%d  %d%%", data.currentPage, data.totalPages,
-               data.progressPercent);
-    }
-    progressTextWidth = r.getTextWidth(t.smallFontId, progressStr);
-    r.drawText(t.smallFontId, screenWidth - marginRight - progressTextWidth, textY, progressStr, t.primaryTextBlack);
+  // 1. Battery (left side)
+  char percentageText[8];
+  int percentage = data.batteryPercent;
+  if (percentage < 0) {
+    snprintf(percentageText, sizeof(percentageText), "--%%");
+    percentage = 0;
+  } else {
+    snprintf(percentageText, sizeof(percentageText), "%d%%", percentage);
+  }
+  percentageTextWidth = r.getTextWidth(t.smallFontId, percentageText);
+  r.drawText(t.smallFontId, 20 + marginLeft, textY, percentageText, t.primaryTextBlack);
+
+  // Battery icon (15x10 px)
+  constexpr int batteryWidth = 15;
+  constexpr int batteryHeight = 10;
+  const int x = marginLeft;
+  const int y = screenHeight - marginBottom + 5;
+
+  // Draw battery outline
+  r.drawLine(x, y, x + batteryWidth - 4, y, t.primaryTextBlack);
+  r.drawLine(x, y + batteryHeight - 1, x + batteryWidth - 4, y + batteryHeight - 1, t.primaryTextBlack);
+  r.drawLine(x, y, x, y + batteryHeight - 1, t.primaryTextBlack);
+  r.drawLine(x + batteryWidth - 4, y, x + batteryWidth - 4, y + batteryHeight - 1, t.primaryTextBlack);
+  // Battery terminal
+  r.drawLine(x + batteryWidth - 3, y + 2, x + batteryWidth - 1, y + 2, t.primaryTextBlack);
+  r.drawLine(x + batteryWidth - 3, y + batteryHeight - 3, x + batteryWidth - 1, y + batteryHeight - 3,
+             t.primaryTextBlack);
+  r.drawLine(x + batteryWidth - 1, y + 2, x + batteryWidth - 1, y + batteryHeight - 3, t.primaryTextBlack);
+
+  // Fill level
+  int filledWidth = percentage * (batteryWidth - 5) / 100 + 1;
+  if (filledWidth > batteryWidth - 5) filledWidth = batteryWidth - 5;
+  if (filledWidth > 0) {
+    r.fillRect(x + 1, y + 1, filledWidth, batteryHeight - 2, t.primaryTextBlack);
   }
 
-  // 2. Battery (left side)
-  if (showBattery) {
-    char percentageText[8];
-    int percentage = data.batteryPercent;
-    if (percentage < 0) {
-      snprintf(percentageText, sizeof(percentageText), "--%%");
-      percentage = 0;
-    } else {
-      snprintf(percentageText, sizeof(percentageText), "%d%%", percentage);
-    }
-    percentageTextWidth = r.getTextWidth(t.smallFontId, percentageText);
-    r.drawText(t.smallFontId, 20 + marginLeft, textY, percentageText, t.primaryTextBlack);
-
-    // Battery icon (15x10 px)
-    constexpr int batteryWidth = 15;
-    constexpr int batteryHeight = 10;
-    const int x = marginLeft;
-    const int y = screenHeight - marginBottom + 5;
-
-    // Draw battery outline
-    r.drawLine(x, y, x + batteryWidth - 4, y, t.primaryTextBlack);
-    r.drawLine(x, y + batteryHeight - 1, x + batteryWidth - 4, y + batteryHeight - 1, t.primaryTextBlack);
-    r.drawLine(x, y, x, y + batteryHeight - 1, t.primaryTextBlack);
-    r.drawLine(x + batteryWidth - 4, y, x + batteryWidth - 4, y + batteryHeight - 1, t.primaryTextBlack);
-    // Battery terminal
-    r.drawLine(x + batteryWidth - 3, y + 2, x + batteryWidth - 1, y + 2, t.primaryTextBlack);
-    r.drawLine(x + batteryWidth - 3, y + batteryHeight - 3, x + batteryWidth - 1, y + batteryHeight - 3,
-               t.primaryTextBlack);
-    r.drawLine(x + batteryWidth - 1, y + 2, x + batteryWidth - 1, y + batteryHeight - 3, t.primaryTextBlack);
-
-    // Fill level
-    int filledWidth = percentage * (batteryWidth - 5) / 100 + 1;
-    if (filledWidth > batteryWidth - 5) filledWidth = batteryWidth - 5;
-    if (filledWidth > 0) {
-      r.fillRect(x + 1, y + 1, filledWidth, batteryHeight - 2, t.primaryTextBlack);
-    }
+  // 2. Page numbers (right side)
+  char pageStr[16];
+  if (data.isPartial || data.totalPages == 0) {
+    snprintf(pageStr, sizeof(pageStr), "%d/-", data.currentPage);
+  } else {
+    snprintf(pageStr, sizeof(pageStr), "%d/%d", data.currentPage, data.totalPages);
   }
+  int pageTextWidth = r.getTextWidth(t.smallFontId, pageStr);
+  r.drawText(t.smallFontId, screenWidth - marginRight - pageTextWidth, textY, pageStr, t.primaryTextBlack);
 
   // 3. Title (center)
-  if (showTitle && data.title && data.title[0] != '\0') {
+  if (data.title && data.title[0] != '\0') {
     const int batteryAreaWidth = 20 + percentageTextWidth;
     const int titleMarginLeft = batteryAreaWidth + 30 + marginLeft;
-    const int titleMarginRight = (showProgress ? progressTextWidth + 30 : 0) + marginRight;
+    const int titleMarginRight = marginRight + pageTextWidth + 10;
     const int availableTextWidth = screenWidth - titleMarginLeft - titleMarginRight;
 
     if (availableTextWidth <= 0) return;

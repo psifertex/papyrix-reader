@@ -657,12 +657,6 @@ void ReaderState::renderPageContents(Core& core, Page& page, int marginTop, int 
 }
 
 void ReaderState::renderStatusBar(Core& core, int marginRight, int marginBottom, int marginLeft) {
-  xSemaphoreTake(cacheMutex_, portMAX_DELAY);
-  bool hasCache = (pageCache_ != nullptr);
-  xSemaphoreGive(cacheMutex_);
-
-  if (!hasCache) return;
-
   const Theme& theme = THEME_MANAGER.current();
   ContentType type = core.content.metadata().type;
 
@@ -681,20 +675,19 @@ void ReaderState::renderStatusBar(Core& core, int marginRight, int marginBottom,
     if (provider && provider->getEpub()) {
       data.currentPage = currentSectionPage_ + 1;
       xSemaphoreTake(cacheMutex_, portMAX_DELAY);
-      data.totalPages = pageCache_->pageCount();
-      data.isPartial = pageCache_->isPartial();
+      if (pageCache_) {
+        data.totalPages = pageCache_->pageCount();
+        data.isPartial = pageCache_->isPartial();
+      } else {
+        data.isPartial = true;
+      }
       xSemaphoreGive(cacheMutex_);
-      const float sectionProgress =
-          data.totalPages > 0 ? static_cast<float>(currentSectionPage_) / data.totalPages : 0.0f;
-      data.progressPercent = provider->getEpub()->calculateProgress(currentSpineIndex_, sectionProgress);
     } else {
-      return;  // EPUB metadata unavailable
+      return;
     }
   } else {
-    // TXT/Markdown: use estimated total pages
     data.currentPage = currentSectionPage_ + 1;
     data.totalPages = core.content.pageCount();
-    data.progressPercent = data.totalPages > 0 ? (data.currentPage * 100) / data.totalPages : 0;
   }
 
   ui::readerStatusBar(renderer_, theme, marginLeft, marginRight, marginBottom, data);

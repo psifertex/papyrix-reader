@@ -108,14 +108,13 @@ void twoColumnRow(const GfxRenderer& r, const Theme& t, int y, const char* label
 struct ReaderStatusBarData {
   int currentPage;
   int totalPages;
-  int progressPercent;
   const char* title;
   int batteryPercent;      // -1 if unavailable
   uint8_t mode;            // Settings::StatusBarMode
   bool isPartial = false;  // True when page cache is incomplete
 };
 
-// Reader status bar - Battery (left), title (center), page progress (right)
+// Reader status bar - Battery (left), title (center), page numbers (right)
 void readerStatusBar(const GfxRenderer& r, const Theme& t, int marginLeft, int marginRight, int marginBottom,
                      const ReaderStatusBarData& data);
 
