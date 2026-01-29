@@ -7,7 +7,6 @@
 #include "views/BootSleepViews.h"
 #include "views/HomeView.h"
 #include "views/NetworkViews.h"
-#include "views/OpdsViews.h"
 #include "views/ReaderViews.h"
 #include "views/SettingsViews.h"
 #include "views/UtilityViews.h"

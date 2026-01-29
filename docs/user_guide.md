@@ -181,13 +181,9 @@ Network and maintenance actions:
 - **File Transfer**
   - Upload e-books to the device via WiFi web server
 
-- **Net Library**
-  - Browse and download books from OPDS-compatible servers
-  - See [3.6 Net Library](#36-net-library) below
-
 - **Calibre Wireless**
   - Connect directly to Calibre desktop to send/receive books
-  - See [3.7 Calibre Wireless](#37-calibre-wireless) below
+  - See [3.6 Calibre Wireless](#36-calibre-wireless) below
 
 - **Cleanup**
   - **Clear Book Caches** — Delete all cached book data and reading progress
@@ -198,58 +194,7 @@ Network and maintenance actions:
 
 View device information: firmware version, uptime, WiFi status, MAC address, free memory, internal disk usage, SD card usage
 
-### 3.6 Net Library
-
-Net Library allows you to browse and download books directly from any [OPDS](https://opds.io/)-compatible server running on your local network. OPDS (Open Publication Distribution System) is an open standard supported by many ebook servers including:
-
-- **Calibre Content Server** — Built into Calibre
-- **COPS** — Calibre OPDS (PHP Server)
-- **Kavita** — Self-hosted digital library
-- **Komga** — Media server for comics/manga
-- **Feedbooks** — Public domain books
-
-#### Getting Started
-
-On first launch, **Project Gutenberg** is preconfigured as a default server, giving you immediate access to over 70,000 free public domain ebooks.
-
-#### Adding More Servers
-
-Servers are configured via the `/config/opds.ini` file on your SD card:
-
-1. Insert the SD card into your computer
-2. Open or create `/config/opds.ini`
-3. Add servers using the INI format:
-
-```ini
-[My Calibre Server]
-url = http://192.168.1.100:8080/opds
-username = myuser
-password = mypassword
-```
-
-> **Tip:** For Calibre, enable the content server in Preferences > Sharing over the net, then use `http://your-ip:8080/opds` as the URL.
-
-#### Browsing Books
-
-1. Select a configured server from the list
-2. The device will connect via WiFi (you'll be prompted to select a network if not connected)
-3. Navigate through catalogs using **Left/Right** or **Volume Up/Down**
-4. Press **Confirm** to enter a catalog or download a book
-5. Press **Back** to go up one level
-
-#### Supported Formats
-
-Books are downloaded in EPUB format. If a book doesn't have an EPUB version available, it cannot be downloaded.
-
-#### Managing Servers
-
-To add, edit, or remove servers, modify the `/config/opds.ini` file on your SD card.
-
-Downloaded books are saved to the `/Books/` folder on your SD card.
-
-> **Note:** When you exit Net Library, the device will automatically restart to reclaim memory used by WiFi.
-
-### 3.7 Calibre Wireless
+### 3.6 Calibre Wireless
 
 Calibre Wireless allows you to send books directly from **Calibre** (the popular ebook management software) to your Papyrix Reader over WiFi. This is the fastest way to transfer books if you already use Calibre.
 
@@ -302,7 +247,7 @@ For detailed instructions, see the [Calibre Wireless Guide](calibre.md).
 
 > **Note:** When you exit Calibre Wireless, the device will automatically restart to reclaim memory used by WiFi.
 
-### 3.8 Sleep Screen
+### 3.7 Sleep Screen
 
 ![Sleep Screen](images/sleep-screen.jpg)
 

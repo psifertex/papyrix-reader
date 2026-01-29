@@ -443,7 +443,6 @@ Here's the complete SD card structure for customization:
 /
 ├── config/
 │   ├── calibre.ini
-│   ├── opds.ini
 │   ├── themes/
 │   │   ├── light.theme
 │   │   ├── dark.theme

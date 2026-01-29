@@ -15,7 +15,7 @@ struct WifiNetwork {
   bool secured;
 };
 
-// Network driver - ONLY used for book sync (Calibre, OPDS, HTTP transfer)
+// Network driver - ONLY used for book sync (Calibre, HTTP transfer)
 // WiFi fragments heap - device must restart after any network use
 class Network {
  public:

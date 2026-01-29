@@ -43,7 +43,6 @@ enum class StateId : uint8_t {
 enum class SyncMode : uint8_t {
   None,
   FileTransfer,
-  NetLibrary,
   CalibreWireless,
 };
 

@@ -394,17 +394,17 @@ Located in `open-x4-sdk/libs/`:
 │   └── wifi.bin              # WiFi credentials
 ├── config/                   # Configuration files
 │   ├── calibre.ini           # Calibre server config
-│   ├── opds.ini              # OPDS catalog config
 │   ├── themes/               # UI themes
 │   └── fonts/                # Custom fonts
-├── XTCache/                  # Book cache
-│   ├── epub/<hash>/          # EPUB cache per book
+├── .papyrix/                 # Book cache
+│   ├── epub_<hash>/          # EPUB cache per book
 │   │   ├── progress.bin      # Reading position
 │   │   ├── cover.bmp         # Cached cover
 │   │   ├── book.bin          # Metadata
-│   │   ├── bookmark.txt      # Bookmarks
-│   │   └── sections/         # Chapter data
-│   └── wallpaper.cache       # Wallpaper cache
+│   │   ├── sections/         # Chapter data
+│   │   └── images/           # Cached inline images
+│   ├── txt_<hash>/           # TXT file cache
+│   └── md_<hash>/            # Markdown file cache
 └── Books/                    # User books directory
 ```
 
