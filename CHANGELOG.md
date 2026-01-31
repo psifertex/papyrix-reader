@@ -1,5 +1,19 @@
 
 
+## v1.1.6 (2026-01-31)
+
+*  Epub: Add better deserialization with checked reads and truncation limits [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
+*  Bump version [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
+*  Fix code style [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
+
+
+## v1.1.5 (2026-01-31)
+
+*  Bump version [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
+*  Update CHANGELOG [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
+*  Html5Normalizer: Strip void element closing tags and handle EOF state [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
+
+
 ## v1.1.4 (2026-01-31)
 
 *  SettingsViews: Fix status bar enum value count from 3 to 2 [[Pavel Liashkov](mailto:pavel.liashkov@protonmail.com)]
