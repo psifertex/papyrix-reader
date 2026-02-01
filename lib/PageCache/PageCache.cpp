@@ -150,7 +150,8 @@ bool PageCache::load(const RenderConfig& config) {
   return true;
 }
 
-bool PageCache::create(ContentParser& parser, const RenderConfig& config, uint16_t maxPages, uint16_t skipPages) {
+bool PageCache::create(ContentParser& parser, const RenderConfig& config, uint16_t maxPages, uint16_t skipPages,
+                       const AbortCallback& shouldAbort) {
   const unsigned long startMs = millis();
 
   std::vector<uint32_t> lut;
@@ -183,8 +184,16 @@ bool PageCache::create(ContentParser& parser, const RenderConfig& config, uint16
     writeHeader(false);
   }
 
+  // Check for abort before starting expensive parsing
+  if (shouldAbort && shouldAbort()) {
+    file_.close();
+    Serial.printf("[CACHE] Aborted before parsing\n");
+    return false;
+  }
+
   uint16_t parsedPages = 0;
   bool hitMaxPages = false;
+  bool aborted = false;
 
   bool success = parser.parsePages(
       [this, &lut, &hitMaxPages, &parsedPages, maxPages, skipPages](std::unique_ptr<Page> page) {
@@ -212,12 +221,19 @@ bool PageCache::create(ContentParser& parser, const RenderConfig& config, uint16
           hitMaxPages = true;
         }
       },
-      maxPages);
+      maxPages, shouldAbort);
 
-  if (!success && pageCount_ == 0) {
+  // Check if we were aborted
+  if (shouldAbort && shouldAbort()) {
+    aborted = true;
+    Serial.printf("[CACHE] Aborted during parsing\n");
+  }
+
+  if ((!success && pageCount_ == 0) || aborted) {
     file_.close();
+    // Remove file to prevent corrupt/incomplete cache
     SdMan.remove(cachePath_.c_str());
-    Serial.printf("[CACHE] Parsing failed with no pages\n");
+    Serial.printf("[CACHE] Parsing failed or aborted with %d pages\n", pageCount_);
     return false;
   }
 
@@ -234,7 +250,7 @@ bool PageCache::create(ContentParser& parser, const RenderConfig& config, uint16
   return true;
 }
 
-bool PageCache::extend(ContentParser& parser, uint16_t additionalPages) {
+bool PageCache::extend(ContentParser& parser, uint16_t additionalPages, const AbortCallback& shouldAbort) {
   if (!isPartial_) {
     Serial.printf("[CACHE] Cache is complete, nothing to extend\n");
     return true;
@@ -246,7 +262,7 @@ bool PageCache::extend(ContentParser& parser, uint16_t additionalPages) {
 
   // Re-parse from start but skip serializing already-cached pages
   parser.reset();
-  return create(parser, config_, targetPages, currentPages);
+  return create(parser, config_, targetPages, currentPages, shouldAbort);
 }
 
 std::unique_ptr<Page> PageCache::loadPage(uint16_t pageNum) {

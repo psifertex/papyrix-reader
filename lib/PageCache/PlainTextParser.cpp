@@ -21,7 +21,8 @@ void PlainTextParser::reset() {
   hasMore_ = true;
 }
 
-bool PlainTextParser::parsePages(const std::function<void(std::unique_ptr<Page>)>& onPageComplete, uint16_t maxPages) {
+bool PlainTextParser::parsePages(const std::function<void(std::unique_ptr<Page>)>& onPageComplete, uint16_t maxPages,
+                                 const AbortCallback& shouldAbort) {
   FsFile file;
   if (!SdMan.openFileForRead("TXT", filepath_, file)) {
     Serial.printf("[TXT] Failed to open file: %s\n", filepath_.c_str());
@@ -42,6 +43,7 @@ bool PlainTextParser::parsePages(const std::function<void(std::unique_ptr<Page>)
   int16_t currentPageY = 0;
   uint16_t pagesCreated = 0;
   std::string partialWord;
+  uint16_t abortCheckCounter = 0;
 
   auto startNewPage = [&]() {
     currentPage.reset(new Page());
@@ -89,6 +91,15 @@ bool PlainTextParser::parsePages(const std::function<void(std::unique_ptr<Page>)
                                     config_.indentLevel, config_.hyphenation, true));
 
   while (file.available() > 0) {
+    // Check for abort every few iterations
+    if (shouldAbort && (++abortCheckCounter % 10 == 0) && shouldAbort()) {
+      Serial.printf("[TXT] Aborted by external request\n");
+      currentOffset_ = file.position();
+      hasMore_ = true;
+      file.close();
+      return false;
+    }
+
     size_t bytesRead = file.read(buffer, READ_CHUNK_SIZE);
     if (bytesRead == 0) break;
 

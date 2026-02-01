@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 
+#include "ContentParser.h"  // For AbortCallback
+
 class ContentParser;
 class GfxRenderer;
 class Page;
@@ -52,19 +54,22 @@ class PageCache {
    * @param config Render config
    * @param maxPages Maximum pages to cache (0 = unlimited)
    * @param skipPages Skip serializing first N pages (for extend)
+   * @param shouldAbort Optional callback to check for cancellation
    * @return true on success
    */
   bool create(ContentParser& parser, const RenderConfig& config, uint16_t maxPages = DEFAULT_CACHE_CHUNK,
-              uint16_t skipPages = 0);
+              uint16_t skipPages = 0, const AbortCallback& shouldAbort = nullptr);
 
   /**
    * Extend cache with more pages.
    * Re-parses content but skips already-cached pages, then appends new pages.
    * @param parser Content parser (will be reset)
    * @param additionalPages Number of additional pages to cache
+   * @param shouldAbort Optional callback to check for cancellation
    * @return true on success
    */
-  bool extend(ContentParser& parser, uint16_t additionalPages = DEFAULT_CACHE_CHUNK);
+  bool extend(ContentParser& parser, uint16_t additionalPages = DEFAULT_CACHE_CHUNK,
+              const AbortCallback& shouldAbort = nullptr);
 
   /**
    * Load a specific page from cache.

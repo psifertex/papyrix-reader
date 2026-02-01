@@ -36,7 +36,8 @@ class MarkdownParser : public ContentParser {
   MarkdownParser(std::string filepath, GfxRenderer& renderer, const RenderConfig& config);
   ~MarkdownParser() override;
 
-  bool parsePages(const std::function<void(std::unique_ptr<Page>)>& onPageComplete, uint16_t maxPages = 0) override;
+  bool parsePages(const std::function<void(std::unique_ptr<Page>)>& onPageComplete, uint16_t maxPages = 0,
+                  const AbortCallback& shouldAbort = nullptr) override;
   bool hasMoreContent() const override { return hasMore_; }
   void reset() override;
 

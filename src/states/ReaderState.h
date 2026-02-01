@@ -1,10 +1,7 @@
 #pragma once
 
-#include <freertos/FreeRTOS.h>
-#include <freertos/semphr.h>
-#include <freertos/task.h>
+#include <BackgroundTask.h>
 
-#include <atomic>
 #include <cstdint>
 #include <memory>
 
@@ -71,25 +68,23 @@ class ReaderState : public State {
   // First text content spine index (from EPUB guide, 0 if not specified)
   int textStartIndex_ = 0;
 
-  // Unified page cache for all content types (protected by cacheMutex_)
+  // Unified page cache for all content types
+  // Ownership model: main thread owns pageCache_ when !cacheTask_.isRunning()
+  //                  background task owns pageCache_ when cacheTask_.isRunning()
+  // Navigation ALWAYS stops task first, then accesses cache
   std::unique_ptr<PageCache> pageCache_;
-  SemaphoreHandle_t cacheMutex_ = nullptr;  // Protects pageCache_ access
   uint8_t pagesUntilFullRefresh_;
 
-  // Background caching (FreeRTOS task for page cache building)
-  TaskHandle_t cacheTaskHandle_ = nullptr;
-  std::atomic<bool> cacheTaskComplete_{false};
-  std::atomic<bool> cacheTaskStopRequested_{false};
+  // Background caching (uses BackgroundTask for proper lifecycle management)
+  BackgroundTask cacheTask_;
   Core* coreForCacheTask_ = nullptr;
-  static void cacheTaskTrampoline(void* param);
-  void cacheTaskLoop();
   void startBackgroundCaching(Core& core);
   void stopBackgroundCaching();
 
   // Navigation helpers (delegates to ReaderNavigation)
   void navigateNext(Core& core);
   void navigatePrev(Core& core);
-  void applyNavResult(const ReaderNavigation::NavResult& result);
+  void applyNavResult(const ReaderNavigation::NavResult& result, Core& core);
 
   // Rendering
   void renderCurrentPage(Core& core);

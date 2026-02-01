@@ -52,6 +52,9 @@ class ChapterHtmlSlimParser {
   XML_Parser xmlParser_ = nullptr;
   bool stopRequested_ = false;
 
+  // External abort callback for cooperative cancellation
+  std::function<bool()> externalAbortCallback_ = nullptr;
+
   // Image failure rate limiting - skip remaining images after consecutive failures
   uint8_t consecutiveImageFailures_ = 0;
   static constexpr uint8_t MAX_CONSECUTIVE_IMAGE_FAILURES = 3;
@@ -83,7 +86,8 @@ class ChapterHtmlSlimParser {
                                  const std::function<void(int)>& progressFn = nullptr,
                                  const std::string& chapterBasePath = "", const std::string& imageCachePath = "",
                                  const std::function<bool(const std::string&, Print&, size_t)>& readItemFn = nullptr,
-                                 const CssParser* cssParser = nullptr)
+                                 const CssParser* cssParser = nullptr,
+                                 const std::function<bool()>& externalAbortCallback = nullptr)
       : filepath(filepath),
         renderer(renderer),
         config(config),
@@ -92,7 +96,8 @@ class ChapterHtmlSlimParser {
         chapterBasePath(chapterBasePath),
         imageCachePath(imageCachePath),
         readItemFn(readItemFn),
-        cssParser_(cssParser) {}
+        cssParser_(cssParser),
+        externalAbortCallback_(externalAbortCallback) {}
   ~ChapterHtmlSlimParser() = default;
   bool parseAndBuildPages();
   void addLineToPage(std::shared_ptr<TextBlock> line);

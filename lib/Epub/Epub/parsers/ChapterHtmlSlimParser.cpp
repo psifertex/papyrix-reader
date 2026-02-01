@@ -362,6 +362,12 @@ void XMLCALL ChapterHtmlSlimParser::endElement(void* userData, const XML_Char* n
 }
 
 bool ChapterHtmlSlimParser::shouldAbort() const {
+  // Check external abort callback first (cooperative cancellation)
+  if (externalAbortCallback_ && externalAbortCallback_()) {
+    Serial.printf("[%lu] [EHP] External abort requested\n", millis());
+    return true;
+  }
+
   // Check timeout
   if (millis() - parseStartTime_ > MAX_PARSE_TIME_MS) {
     Serial.printf("[%lu] [EHP] Parse timeout exceeded (%u ms)\n", millis(), MAX_PARSE_TIME_MS);

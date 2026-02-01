@@ -319,7 +319,8 @@ bool MarkdownParser::tokenCallback(const md_token_t* token, void* userData) {
   return true;
 }
 
-bool MarkdownParser::parsePages(const std::function<void(std::unique_ptr<Page>)>& onPageComplete, uint16_t maxPages) {
+bool MarkdownParser::parsePages(const std::function<void(std::unique_ptr<Page>)>& onPageComplete, uint16_t maxPages,
+                                const AbortCallback& shouldAbort) {
   FsFile file;
   if (!SdMan.openFileForRead("MD", filepath_, file)) {
     Serial.printf("[MD] Failed to open file: %s\n", filepath_.c_str());
@@ -362,8 +363,16 @@ bool MarkdownParser::parsePages(const std::function<void(std::unique_ptr<Page>)>
 
   size_t bytesProcessed = 0;
   bool prevLineBlank = true;
+  uint16_t abortCheckCounter = 0;
 
   while (!ctx.hitMaxPages) {
+    // Check for external abort every few lines
+    if (shouldAbort && (++abortCheckCounter % 20 == 0) && shouldAbort()) {
+      Serial.printf("[MD] Aborted by external request\n");
+      ctx.hitMaxPages = true;
+      break;
+    }
+
     if (!readLine(file)) {
       break;
     }

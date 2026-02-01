@@ -18,8 +18,8 @@ EpubChapterParser::EpubChapterParser(std::shared_ptr<Epub> epub, int spineIndex,
 
 void EpubChapterParser::reset() { hasMore_ = true; }
 
-bool EpubChapterParser::parsePages(const std::function<void(std::unique_ptr<Page>)>& onPageComplete,
-                                   uint16_t maxPages) {
+bool EpubChapterParser::parsePages(const std::function<void(std::unique_ptr<Page>)>& onPageComplete, uint16_t maxPages,
+                                   const AbortCallback& shouldAbort) {
   const auto localPath = epub_->getSpineItem(spineIndex_).href;
   const auto tmpHtmlPath = epub_->getCachePath() + "/.tmp_" + std::to_string(spineIndex_) + ".html";
 
@@ -93,7 +93,7 @@ bool EpubChapterParser::parsePages(const std::function<void(std::unique_ptr<Page
   };
 
   ChapterHtmlSlimParser parser(parseHtmlPath, renderer_, config_, wrappedCallback, nullptr, chapterBasePath,
-                               imageCachePath_, readItemFn, epub_->getCssParser());
+                               imageCachePath_, readItemFn, epub_->getCssParser(), shouldAbort);
 
   success = parser.parseAndBuildPages();
 

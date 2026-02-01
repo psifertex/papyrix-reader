@@ -175,11 +175,17 @@ void ParsedText::addWord(std::string word, const EpdFontFamily::Style fontStyle)
 }
 
 // Consumes data to minimize memory usage
-void ParsedText::layoutAndExtractLines(const GfxRenderer& renderer, const int fontId, const uint16_t viewportWidth,
+// Returns false if aborted, true otherwise
+bool ParsedText::layoutAndExtractLines(const GfxRenderer& renderer, const int fontId, const uint16_t viewportWidth,
                                        const std::function<void(std::shared_ptr<TextBlock>)>& processLine,
-                                       const bool includeLastLine) {
+                                       const bool includeLastLine, const AbortCallback& shouldAbort) {
   if (words.empty()) {
-    return;
+    return true;
+  }
+
+  // Check for abort before starting
+  if (shouldAbort && shouldAbort()) {
+    return false;
   }
 
   const int pageWidth = viewportWidth;
@@ -187,17 +193,31 @@ void ParsedText::layoutAndExtractLines(const GfxRenderer& renderer, const int fo
 
   // Pre-split oversized words at soft hyphen positions
   if (hyphenationEnabled) {
-    preSplitOversizedWords(renderer, fontId, pageWidth);
+    if (!preSplitOversizedWords(renderer, fontId, pageWidth, shouldAbort)) {
+      return false;  // Aborted
+    }
   }
 
   const auto wordWidths = calculateWordWidths(renderer, fontId);
-  const auto lineBreakIndices = useGreedyBreaking ? computeLineBreaksGreedy(pageWidth, spaceWidth, wordWidths)
-                                                  : computeLineBreaks(pageWidth, spaceWidth, wordWidths);
+  const auto lineBreakIndices = useGreedyBreaking
+                                    ? computeLineBreaksGreedy(pageWidth, spaceWidth, wordWidths, shouldAbort)
+                                    : computeLineBreaks(pageWidth, spaceWidth, wordWidths, shouldAbort);
+
+  // Check if we were aborted during line break computation
+  if (shouldAbort && shouldAbort()) {
+    return false;
+  }
+
   const size_t lineCount = includeLastLine ? lineBreakIndices.size() : lineBreakIndices.size() - 1;
 
   for (size_t i = 0; i < lineCount; ++i) {
+    // Check for abort periodically during line extraction
+    if (shouldAbort && (i % 50 == 0) && shouldAbort()) {
+      return false;
+    }
     extractLine(i, pageWidth, spaceWidth, wordWidths, lineBreakIndices, processLine);
   }
+  return true;
 }
 
 std::vector<uint16_t> ParsedText::calculateWordWidths(const GfxRenderer& renderer, const int fontId) {
@@ -242,7 +262,8 @@ std::vector<uint16_t> ParsedText::calculateWordWidths(const GfxRenderer& rendere
 }
 
 std::vector<size_t> ParsedText::computeLineBreaks(const int pageWidth, const int spaceWidth,
-                                                  const std::vector<uint16_t>& wordWidths) const {
+                                                  const std::vector<uint16_t>& wordWidths,
+                                                  const AbortCallback& shouldAbort) const {
   const size_t n = words.size();
 
   if (n == 0) {
@@ -255,6 +276,11 @@ std::vector<size_t> ParsedText::computeLineBreaks(const int pageWidth, const int
   minDemerits[0] = 0.0f;
 
   for (size_t i = 0; i < n; i++) {
+    // Check for abort periodically (every 100 words in outer loop)
+    if (shouldAbort && (i % 100 == 0) && shouldAbort()) {
+      return {};  // Return empty to signal abort
+    }
+
     if (minDemerits[i] >= INFINITY_PENALTY) continue;
 
     int lineWidth = -spaceWidth;  // First word won't have preceding space
@@ -307,7 +333,8 @@ std::vector<size_t> ParsedText::computeLineBreaks(const int pageWidth, const int
 }
 
 std::vector<size_t> ParsedText::computeLineBreaksGreedy(const int pageWidth, const int spaceWidth,
-                                                        const std::vector<uint16_t>& wordWidths) const {
+                                                        const std::vector<uint16_t>& wordWidths,
+                                                        const AbortCallback& shouldAbort) const {
   std::vector<size_t> breaks;
   const size_t n = wordWidths.size();
 
@@ -317,6 +344,11 @@ std::vector<size_t> ParsedText::computeLineBreaksGreedy(const int pageWidth, con
 
   int lineWidth = -spaceWidth;  // First word won't have preceding space
   for (size_t i = 0; i < n; i++) {
+    // Check for abort periodically (every 200 words)
+    if (shouldAbort && (i % 200 == 0) && shouldAbort()) {
+      return {};  // Return empty to signal abort
+    }
+
     const int wordWidth = wordWidths[i];
 
     // Check if adding this word would overflow the line
@@ -386,14 +418,21 @@ void ParsedText::extractLine(const size_t breakIndex, const int pageWidth, const
   processLine(std::make_shared<TextBlock>(std::move(lineData), style));
 }
 
-void ParsedText::preSplitOversizedWords(const GfxRenderer& renderer, const int fontId, const int pageWidth) {
+bool ParsedText::preSplitOversizedWords(const GfxRenderer& renderer, const int fontId, const int pageWidth,
+                                        const AbortCallback& shouldAbort) {
   std::list<std::string> newWords;
   std::list<EpdFontFamily::Style> newStyles;
 
   auto wordIt = words.begin();
   auto styleIt = wordStyles.begin();
+  size_t wordCount = 0;
 
   while (wordIt != words.end()) {
+    // Check for abort periodically (every 50 words)
+    if (shouldAbort && (++wordCount % 50 == 0) && shouldAbort()) {
+      return false;  // Aborted
+    }
+
     const std::string& word = *wordIt;
     const EpdFontFamily::Style wordStyle = *styleIt;
 
@@ -419,8 +458,13 @@ void ParsedText::preSplitOversizedWords(const GfxRenderer& renderer, const int f
       } else {
         // Split word at soft hyphen positions
         std::string remaining = word;
+        size_t splitIterations = 0;
+        constexpr size_t MAX_SPLIT_ITERATIONS = 100;  // Safety limit
 
-        while (true) {
+        while (splitIterations++ < MAX_SPLIT_ITERATIONS) {
+          if (splitIterations == MAX_SPLIT_ITERATIONS) {
+            Serial.printf("[PT] Warning: hit max split iterations for oversized word\n");
+          }
           const std::string strippedRemaining = stripSoftHyphens(remaining);
           const int remainingWidth = renderer.getTextWidth(fontId, strippedRemaining.c_str(), wordStyle);
 
@@ -479,4 +523,5 @@ void ParsedText::preSplitOversizedWords(const GfxRenderer& renderer, const int f
 
   words = std::move(newWords);
   wordStyles = std::move(newStyles);
+  return true;
 }

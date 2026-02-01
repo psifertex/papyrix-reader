@@ -23,13 +23,8 @@
 
 namespace papyrix {
 
-// WARNING: If timeout occurs in stopBackgroundCaching(), the task will be force-deleted.
-// Caller must ensure Core outlives ReaderState.
-static constexpr int kTaskStopTimeoutMs = 3000;
-static constexpr int kTaskStopPollMs = 10;
-static constexpr int kTaskStartSpinPollMs = 5;
-static constexpr int kTaskStartSpinMaxMs = 1000;
 static constexpr int kCacheTaskStackSize = 8192;
+static constexpr int kCacheTaskStopTimeoutMs = 10000;  // 10s - generous for slow SD operations
 
 namespace {
 constexpr int horizontalPadding = 5;
@@ -53,51 +48,70 @@ int ReaderState::calcFirstContentSpine(bool hasCover, int textStartIndex, size_t
 }
 
 // Template implementation for cache creation/extension
+// Called from main thread when background task is NOT running (ownership model)
+// No mutex needed - main thread owns pageCache_ when task is stopped
 template <typename ParserT>
 void ReaderState::createOrExtendCacheImpl(ParserT& parser, const std::string& cachePath, const RenderConfig& config) {
-  xSemaphoreTake(cacheMutex_, portMAX_DELAY);
+  bool needsCreate = false;
+  bool needsExtend = false;
+
   if (!pageCache_) {
     pageCache_.reset(new PageCache(cachePath));
     if (pageCache_->load(config)) {
-      if (pageCache_->isPartial()) {
-        pageCache_->extend(parser, PageCache::DEFAULT_CACHE_CHUNK);
-      }
-      xSemaphoreGive(cacheMutex_);
-      return;
+      needsExtend = pageCache_->isPartial();
+    } else {
+      needsCreate = true;
+    }
+  } else {
+    needsExtend = pageCache_->isPartial();
+  }
+
+  if (pageCache_) {
+    if (needsExtend) {
+      pageCache_->extend(parser, PageCache::DEFAULT_CACHE_CHUNK);
+    } else if (needsCreate) {
+      pageCache_->create(parser, config, PageCache::DEFAULT_CACHE_CHUNK);
     }
   }
-  if (pageCache_->isPartial()) {
-    pageCache_->extend(parser, PageCache::DEFAULT_CACHE_CHUNK);
-  } else {
-    pageCache_->create(parser, config, PageCache::DEFAULT_CACHE_CHUNK);
-  }
-  xSemaphoreGive(cacheMutex_);
 }
 
 // Template implementation for background caching (handles stop request checks)
+// Called from background task - uses BackgroundTask's shouldStop() and getAbortCallback()
+// Ownership: background task owns pageCache_ while running
 template <typename ParserT>
 void ReaderState::backgroundCacheImpl(ParserT& parser, const std::string& cachePath, const RenderConfig& config) {
-  xSemaphoreTake(cacheMutex_, portMAX_DELAY);
+  auto shouldAbort = cacheTask_.getAbortCallback();
+
+  // Check for early abort before doing anything
+  if (cacheTask_.shouldStop()) {
+    Serial.println("[READER] Background cache aborted before start");
+    return;
+  }
+
+  // Create/load cache (we own pageCache_ while task is running)
   pageCache_.reset(new PageCache(cachePath));
   bool loaded = pageCache_->load(config);
   bool needsExtend = loaded && pageCache_->needsExtension(currentSectionPage_);
-  xSemaphoreGive(cacheMutex_);
+
+  // Check for abort after setup
+  if (cacheTask_.shouldStop()) {
+    pageCache_.reset();
+    Serial.println("[READER] Background cache aborted after setup");
+    return;
+  }
 
   if (!loaded || needsExtend) {
-    xSemaphoreTake(cacheMutex_, portMAX_DELAY);
-    if (!cacheTaskStopRequested_.load(std::memory_order_acquire)) {
-      bool success;
-      if (needsExtend) {
-        success = pageCache_->extend(parser, PageCache::DEFAULT_CACHE_CHUNK);
-      } else {
-        success = pageCache_->create(parser, config, PageCache::DEFAULT_CACHE_CHUNK);
-      }
-      if (!success) {
-        Serial.println("[READER] Cache creation failed, clearing pageCache");
-        pageCache_.reset();
-      }
+    bool success;
+    if (needsExtend) {
+      success = pageCache_->extend(parser, PageCache::DEFAULT_CACHE_CHUNK, shouldAbort);
+    } else {
+      success = pageCache_->create(parser, config, PageCache::DEFAULT_CACHE_CHUNK, 0, shouldAbort);
     }
-    xSemaphoreGive(cacheMutex_);
+
+    if (!success || cacheTask_.shouldStop()) {
+      Serial.println("[READER] Cache creation failed or aborted, clearing pageCache");
+      pageCache_.reset();
+    }
   }
 }
 
@@ -110,18 +124,11 @@ ReaderState::ReaderState(GfxRenderer& renderer)
       currentSpineIndex_(0),
       currentSectionPage_(0),
       pagesUntilFullRefresh_(1),
-      tocView_{},
-      cacheMutex_(xSemaphoreCreateMutex()) {
+      tocView_{} {
   contentPath_[0] = '\0';
 }
 
-ReaderState::~ReaderState() {
-  stopBackgroundCaching();
-  if (cacheMutex_) {
-    vSemaphoreDelete(cacheMutex_);
-    cacheMutex_ = nullptr;
-  }
-}
+ReaderState::~ReaderState() { stopBackgroundCaching(); }
 
 void ReaderState::setContentPath(const char* path) {
   if (path) {
@@ -140,10 +147,8 @@ void ReaderState::enter(Core& core) {
   contentLoaded_ = false;
   loadFailed_ = false;
   needsRender_ = true;
-  xSemaphoreTake(cacheMutex_, portMAX_DELAY);
-  pageCache_.reset();
-  xSemaphoreGive(cacheMutex_);
-  cacheTaskComplete_.store(false, std::memory_order_relaxed);
+  stopBackgroundCaching();  // Ensure any previous task is stopped
+  pageCache_.reset();       // Safe - task is stopped
   currentSpineIndex_ = 0;
   currentSectionPage_ = 0;  // Will be set to -1 after progress load if at start
 
@@ -263,7 +268,7 @@ void ReaderState::enter(Core& core) {
 void ReaderState::exit(Core& core) {
   Serial.println("[READER] Exiting");
 
-  // Stop background caching task first
+  // Stop background caching task first - BackgroundTask::stop() waits properly
   stopBackgroundCaching();
 
   if (contentLoaded_) {
@@ -275,13 +280,8 @@ void ReaderState::exit(Core& core) {
     progress.flatPage = currentPage_;
     ProgressManager::save(core, core.content.cacheDir(), core.content.metadata().type, progress);
 
-    // Use timeout in case mutex is stuck from force-deleted task
-    if (xSemaphoreTake(cacheMutex_, pdMS_TO_TICKS(100)) == pdTRUE) {
-      pageCache_.reset();
-      xSemaphoreGive(cacheMutex_);
-    } else {
-      Serial.println("[READER] Warning: cacheMutex_ stuck, skipping cleanup");
-    }
+    // Safe to reset - task is stopped, we own pageCache_
+    pageCache_.reset();
     core.content.close();
   }
 
@@ -363,6 +363,9 @@ void ReaderState::render(Core& core) {
 }
 
 void ReaderState::navigateNext(Core& core) {
+  // Stop background task before accessing pageCache_ (ownership model)
+  stopBackgroundCaching();
+
   // From cover (-1) -> first text content page
   if (currentSpineIndex_ == 0 && currentSectionPage_ == -1) {
     auto* provider = core.content.asEpub();
@@ -374,14 +377,11 @@ void ReaderState::navigateNext(Core& core) {
 
     if (firstContentSpine != currentSpineIndex_) {
       currentSpineIndex_ = firstContentSpine;
-      stopBackgroundCaching();
-      xSemaphoreTake(cacheMutex_, portMAX_DELAY);
       pageCache_.reset();
-      xSemaphoreGive(cacheMutex_);
-      cacheTaskComplete_.store(false, std::memory_order_relaxed);
     }
     currentSectionPage_ = 0;
     needsRender_ = true;
+    startBackgroundCaching(core);
     return;
   }
 
@@ -390,13 +390,14 @@ void ReaderState::navigateNext(Core& core) {
   pos.spineIndex = currentSpineIndex_;
   pos.sectionPage = currentSectionPage_;
   pos.flatPage = currentPage_;
-  xSemaphoreTake(cacheMutex_, portMAX_DELAY);
   auto result = ReaderNavigation::next(type, pos, pageCache_.get(), core.content.pageCount());
-  xSemaphoreGive(cacheMutex_);
-  applyNavResult(result);
+  applyNavResult(result, core);
 }
 
 void ReaderState::navigatePrev(Core& core) {
+  // Stop background task before accessing pageCache_ (ownership model)
+  stopBackgroundCaching();
+
   auto* provider = core.content.asEpub();
   size_t spineCount = 1;
   if (provider && provider->getEpub()) {
@@ -410,11 +411,7 @@ void ReaderState::navigatePrev(Core& core) {
     if (hasCover_ && core.settings.showImages) {
       currentSpineIndex_ = 0;
       currentSectionPage_ = -1;
-      stopBackgroundCaching();
-      xSemaphoreTake(cacheMutex_, portMAX_DELAY);
       pageCache_.reset();  // Don't need cache for cover
-      xSemaphoreGive(cacheMutex_);
-      cacheTaskComplete_.store(false, std::memory_order_relaxed);
       needsRender_ = true;
     }
     return;  // At start of book either way
@@ -422,7 +419,8 @@ void ReaderState::navigatePrev(Core& core) {
 
   // Prevent going back from cover
   if (currentSpineIndex_ == 0 && currentSectionPage_ == -1) {
-    return;  // Already at cover
+    startBackgroundCaching(core);  // Resume task before returning
+    return;                        // Already at cover
   }
 
   ContentType type = core.content.metadata().type;
@@ -430,24 +428,19 @@ void ReaderState::navigatePrev(Core& core) {
   pos.spineIndex = currentSpineIndex_;
   pos.sectionPage = currentSectionPage_;
   pos.flatPage = currentPage_;
-  xSemaphoreTake(cacheMutex_, portMAX_DELAY);
   auto result = ReaderNavigation::prev(type, pos, pageCache_.get());
-  xSemaphoreGive(cacheMutex_);
-  applyNavResult(result);
+  applyNavResult(result, core);
 }
 
-void ReaderState::applyNavResult(const ReaderNavigation::NavResult& result) {
+void ReaderState::applyNavResult(const ReaderNavigation::NavResult& result, Core& core) {
   currentSpineIndex_ = result.position.spineIndex;
   currentSectionPage_ = result.position.sectionPage;
   currentPage_ = result.position.flatPage;
   needsRender_ = result.needsRender;
   if (result.needsCacheReset) {
-    stopBackgroundCaching();
-    xSemaphoreTake(cacheMutex_, portMAX_DELAY);
-    pageCache_.reset();
-    xSemaphoreGive(cacheMutex_);
-    cacheTaskComplete_.store(false, std::memory_order_relaxed);
+    pageCache_.reset();  // Safe - task already stopped by caller
   }
+  startBackgroundCaching(core);  // Resume caching
 }
 
 void ReaderState::renderCurrentPage(Core& core) {
@@ -520,40 +513,30 @@ void ReaderState::renderCachedPage(Core& core) {
     }
   }
 
+  // Stop background task to ensure we own pageCache_ (ownership model)
+  stopBackgroundCaching();
+
   // Create or load cache if needed
-  xSemaphoreTake(cacheMutex_, portMAX_DELAY);
-  bool cacheExists = (pageCache_ != nullptr);
-  xSemaphoreGive(cacheMutex_);
+  if (!pageCache_) {
+    // Try to load existing cache silently first
+    loadCacheFromDisk(core);
 
-  if (!cacheExists) {
-    // Check if background task completed
-    if (cacheTaskComplete_.load(std::memory_order_acquire)) {
-      Serial.println("[READER] Using cache from background task");
-    } else {
-      // Try to load existing cache silently first
-      loadCacheFromDisk(core);
+    bool pageIsCached =
+        pageCache_ && currentSectionPage_ >= 0 && currentSectionPage_ < static_cast<int>(pageCache_->pageCount());
 
-      // Check if current page is now cached
-      xSemaphoreTake(cacheMutex_, portMAX_DELAY);
-      bool pageIsCached =
-          pageCache_ && currentSectionPage_ >= 0 && currentSectionPage_ < static_cast<int>(pageCache_->pageCount());
-      xSemaphoreGive(cacheMutex_);
+    if (!pageIsCached) {
+      // Current page not cached - show "Indexing..." and create/extend
+      renderer_.clearScreen(theme.backgroundColor);
+      ui::centeredMessage(renderer_, theme, core.settings.getReaderFontId(theme), "Indexing...");
+      renderer_.displayBuffer();
 
-      if (!pageIsCached) {
-        // Current page not cached - show "Indexing..." and create/extend
-        renderer_.clearScreen(theme.backgroundColor);
-        ui::centeredMessage(renderer_, theme, core.settings.getReaderFontId(theme), "Indexing...");
-        renderer_.displayBuffer();
+      createOrExtendCache(core);
 
-        createOrExtendCache(core);
-
-        // Clear overlay
-        renderer_.clearScreen(theme.backgroundColor);
-      }
+      // Clear overlay
+      renderer_.clearScreen(theme.backgroundColor);
     }
 
     // Clamp page number (handle negative values and out-of-bounds)
-    xSemaphoreTake(cacheMutex_, portMAX_DELAY);
     if (pageCache_) {
       const int cachedPages = static_cast<int>(pageCache_->pageCount());
       if (currentSectionPage_ < 0) {
@@ -562,7 +545,6 @@ void ReaderState::renderCachedPage(Core& core) {
         currentSectionPage_ = cachedPages > 0 ? cachedPages - 1 : 0;
       }
     }
-    xSemaphoreGive(cacheMutex_);
   }
 
   // Check if we need to extend cache
@@ -574,20 +556,16 @@ void ReaderState::renderCachedPage(Core& core) {
     return;
   }
 
-  // Load and render page (cache is now guaranteed to exist)
-  xSemaphoreTake(cacheMutex_, portMAX_DELAY);
+  // Load and render page (cache is now guaranteed to exist, we own it)
   size_t pageCount = pageCache_ ? pageCache_->pageCount() : 0;
   auto page = pageCache_ ? pageCache_->loadPage(currentSectionPage_) : nullptr;
-  xSemaphoreGive(cacheMutex_);
 
   if (!page) {
     Serial.println("[READER] Failed to load page, clearing cache");
-    xSemaphoreTake(cacheMutex_, portMAX_DELAY);
     if (pageCache_) {
       pageCache_->clear();
       pageCache_.reset();
     }
-    xSemaphoreGive(cacheMutex_);
     needsRender_ = true;
     return;
   }
@@ -621,9 +599,8 @@ void ReaderState::renderCachedPage(Core& core) {
 }
 
 bool ReaderState::ensurePageCached(Core& core, uint16_t pageNum) {
-  xSemaphoreTake(cacheMutex_, portMAX_DELAY);
+  // Caller must have stopped background task (we own pageCache_)
   if (!pageCache_) {
-    xSemaphoreGive(cacheMutex_);
     return false;
   }
 
@@ -631,7 +608,6 @@ bool ReaderState::ensurePageCached(Core& core, uint16_t pageNum) {
   size_t pageCount = pageCache_->pageCount();
   bool needsExtension = pageCache_->needsExtension(pageNum);
   bool isPartial = pageCache_->isPartial();
-  xSemaphoreGive(cacheMutex_);
 
   if (pageNum < pageCount) {
     // Check if we should pre-extend (approaching end of partial cache)
@@ -655,10 +631,7 @@ bool ReaderState::ensurePageCached(Core& core, uint16_t pageNum) {
 
   createOrExtendCache(core);
 
-  xSemaphoreTake(cacheMutex_, portMAX_DELAY);
   pageCount = pageCache_ ? pageCache_->pageCount() : 0;
-  xSemaphoreGive(cacheMutex_);
-
   return pageNum < pageCount;
 }
 
@@ -684,14 +657,13 @@ void ReaderState::loadCacheFromDisk(Core& core) {
     return;
   }
 
-  xSemaphoreTake(cacheMutex_, portMAX_DELAY);
+  // Caller must have stopped background task (we own pageCache_)
   if (!pageCache_) {
     pageCache_.reset(new PageCache(cachePath));
     if (!pageCache_->load(config)) {
       pageCache_.reset();
     }
   }
-  xSemaphoreGive(cacheMutex_);
 }
 
 void ReaderState::createOrExtendCache(Core& core) {
@@ -745,18 +717,17 @@ void ReaderState::renderStatusBar(Core& core, int marginRight, int marginBottom,
   data.batteryPercent = (millivolts < 100) ? -1 : BatteryMonitor::percentageFromMillivolts(millivolts);
 
   // Page info
+  // Note: renderCachedPage() already stopped the task, so we own pageCache_
   if (type == ContentType::Epub) {
     auto* provider = core.content.asEpub();
     if (provider && provider->getEpub()) {
       data.currentPage = currentSectionPage_ + 1;
-      xSemaphoreTake(cacheMutex_, portMAX_DELAY);
       if (pageCache_) {
         data.totalPages = pageCache_->pageCount();
         data.isPartial = pageCache_->isPartial();
       } else {
         data.isPartial = true;
       }
-      xSemaphoreGive(cacheMutex_);
     } else {
       return;
     }
@@ -841,171 +812,119 @@ bool ReaderState::renderCoverPage(Core& core) {
 }
 
 void ReaderState::startBackgroundCaching(Core& core) {
-  // Spin-wait if a previous stop is still in progress
-  constexpr int kMaxSpinIterations = kTaskStartSpinMaxMs / kTaskStartSpinPollMs;
-  int spinCount = 0;
-  while (cacheTaskHandle_ != nullptr && cacheTaskStopRequested_.load(std::memory_order_acquire)) {
-    vTaskDelay(pdMS_TO_TICKS(kTaskStartSpinPollMs));
-    if (++spinCount > kMaxSpinIterations) {
-      Serial.println("[READER] ERROR: Previous task still not stopped after spin timeout");
-      vTaskDelete(cacheTaskHandle_);
-      cacheTaskHandle_ = nullptr;
-      cacheTaskStopRequested_.store(false, std::memory_order_release);
-      break;
-    }
-  }
-
-  if (cacheTaskHandle_ != nullptr) {
+  // BackgroundTask handles safe restart via CAS loop
+  if (cacheTask_.isRunning()) {
     Serial.println("[READER] Warning: Previous cache task still running, stopping first");
     stopBackgroundCaching();
   }
 
   Serial.println("[READER] Starting background page cache task");
   coreForCacheTask_ = &core;
-  cacheTaskComplete_.store(false, std::memory_order_release);
-  cacheTaskStopRequested_.store(false, std::memory_order_release);
 
-  xTaskCreate(&ReaderState::cacheTaskTrampoline, "PageCache", kCacheTaskStackSize, this, 0, &cacheTaskHandle_);
-}
+  // Snapshot state for the background task
+  const int sectionPage = currentSectionPage_;
+  const int spineIndex = currentSpineIndex_;
+  const bool coverExists = hasCover_;
+  const int textStart = textStartIndex_;
 
-void ReaderState::cacheTaskTrampoline(void* param) { static_cast<ReaderState*>(param)->cacheTaskLoop(); }
+  cacheTask_.start(
+      "PageCache", kCacheTaskStackSize,
+      [this, sectionPage, spineIndex, coverExists, textStart]() {
+        const Theme& theme = THEME_MANAGER.current();
+        Serial.println("[READER] Background cache task started");
 
-void ReaderState::cacheTaskLoop() {
-  const Theme& theme = THEME_MANAGER.current();
-
-  Serial.println("[READER] Background cache task started");
-
-  // Declare variables before any goto to avoid crossing initialization
-  bool cacheExists = false;
-  Core* corePtr = nullptr;
-  int sectionPage = 0;
-  int spineIndex = 0;
-  bool coverExists = false;
-  int textStart = 0;
-
-  if (cacheTaskStopRequested_.load(std::memory_order_acquire)) {
-    Serial.println("[READER] Background cache task aborted (stop requested)");
-    goto cleanup;
-  }
-
-  // Snapshot shared state under mutex to avoid race condition
-  xSemaphoreTake(cacheMutex_, portMAX_DELAY);
-  cacheExists = (pageCache_ != nullptr);
-  corePtr = coreForCacheTask_;
-  sectionPage = currentSectionPage_;
-  spineIndex = currentSpineIndex_;
-  coverExists = hasCover_;
-  textStart = textStartIndex_;
-  xSemaphoreGive(cacheMutex_);
-
-  if (!cacheExists && !cacheTaskStopRequested_.load(std::memory_order_acquire) && corePtr) {
-    Core& coreRef = *corePtr;
-    ContentType type = coreRef.content.metadata().type;
-
-    if (type == ContentType::Epub) {
-      auto* provider = coreRef.content.asEpub();
-      if (provider && provider->getEpub() && !cacheTaskStopRequested_.load(std::memory_order_acquire)) {
-        const auto vp = getReaderViewport();
-        const auto config = coreRef.settings.getRenderConfig(theme, vp.width, vp.height);
-        const auto* epub = provider->getEpub();
-        std::string imageCachePath = coreRef.settings.showImages ? (epub->getCachePath() + "/images") : "";
-        // When on cover page (sectionPage=-1), cache the first content spine
-        int spineToCache = spineIndex;
-        if (sectionPage == -1) {
-          spineToCache = calcFirstContentSpine(coverExists, textStart, epub->getSpineItemsCount());
+        if (cacheTask_.shouldStop()) {
+          Serial.println("[READER] Background cache task aborted (stop requested)");
+          return;
         }
-        std::string cachePath = epubSectionCachePath(epub->getCachePath(), spineToCache);
-        EpubChapterParser parser(provider->getEpubShared(), spineToCache, renderer_, config, imageCachePath);
-        backgroundCacheImpl(parser, cachePath, config);
-      }
-    } else if (type == ContentType::Markdown && !cacheTaskStopRequested_.load(std::memory_order_acquire)) {
-      const auto vp = getReaderViewport();
-      const auto config = coreRef.settings.getRenderConfig(theme, vp.width, vp.height);
-      std::string cachePath = contentCachePath(coreRef.content.cacheDir(), config.fontId);
-      MarkdownParser parser(contentPath_, renderer_, config);
-      backgroundCacheImpl(parser, cachePath, config);
-    } else if (type == ContentType::Txt && !cacheTaskStopRequested_.load(std::memory_order_acquire)) {
-      const auto vp = getReaderViewport();
-      const auto config = coreRef.settings.getRenderConfig(theme, vp.width, vp.height);
-      std::string cachePath = contentCachePath(coreRef.content.cacheDir(), config.fontId);
-      PlainTextParser parser(contentPath_, renderer_, config);
-      backgroundCacheImpl(parser, cachePath, config);
-    }
-  }
 
-  // Generate thumbnail from cover for HomeState (lower priority than page cache)
-  if (corePtr && !cacheTaskStopRequested_.load(std::memory_order_acquire)) {
-    Core& coreRef = *corePtr;
-    std::string coverPath = coreRef.content.getCoverPath();
-    std::string thumbPath = coreRef.content.getThumbnailPath();
-    if (!coverPath.empty() && !thumbPath.empty()) {
-      const char* logTag = "RDR";
-      switch (coreRef.content.metadata().type) {
-        case ContentType::Epub:
-          logTag = "EPB";
-          break;
-        case ContentType::Txt:
-          logTag = "TXT";
-          break;
-        case ContentType::Markdown:
-          logTag = "MD ";
-          break;
-        default:
-          break;
-      }
-      if (!CoverHelpers::generateThumbFromCover(coverPath, thumbPath, logTag)) {
-        Serial.printf("[%s] Thumbnail generation failed\n", logTag);
-      }
-    }
-  }
+        Core* corePtr = coreForCacheTask_;
+        if (!corePtr) {
+          Serial.println("[READER] Background cache task aborted (no core)");
+          return;
+        }
 
-  if (!cacheTaskStopRequested_.load(std::memory_order_acquire)) {
-    cacheTaskComplete_.store(true, std::memory_order_release);
-    Serial.println("[READER] Background cache task completed");
-  } else {
-    Serial.println("[READER] Background cache task stopped");
-  }
+        Core& coreRef = *corePtr;
+        ContentType type = coreRef.content.metadata().type;
 
-cleanup:
-  // CRITICAL: Clear handle BEFORE vTaskDelete so main thread knows we're exiting
-  cacheTaskHandle_ = nullptr;
+        // Build cache if it doesn't exist
+        if (!pageCache_ && !cacheTask_.shouldStop()) {
+          if (type == ContentType::Epub) {
+            auto* provider = coreRef.content.asEpub();
+            if (provider && provider->getEpub() && !cacheTask_.shouldStop()) {
+              const auto vp = getReaderViewport();
+              const auto config = coreRef.settings.getRenderConfig(theme, vp.width, vp.height);
+              const auto* epub = provider->getEpub();
+              std::string imageCachePath = coreRef.settings.showImages ? (epub->getCachePath() + "/images") : "";
+              // When on cover page (sectionPage=-1), cache the first content spine
+              int spineToCache = spineIndex;
+              if (sectionPage == -1) {
+                spineToCache = calcFirstContentSpine(coverExists, textStart, epub->getSpineItemsCount());
+              }
+              std::string cachePath = epubSectionCachePath(epub->getCachePath(), spineToCache);
+              EpubChapterParser parser(provider->getEpubShared(), spineToCache, renderer_, config, imageCachePath);
+              backgroundCacheImpl(parser, cachePath, config);
+            }
+          } else if (type == ContentType::Markdown && !cacheTask_.shouldStop()) {
+            const auto vp = getReaderViewport();
+            const auto config = coreRef.settings.getRenderConfig(theme, vp.width, vp.height);
+            std::string cachePath = contentCachePath(coreRef.content.cacheDir(), config.fontId);
+            MarkdownParser parser(contentPath_, renderer_, config);
+            backgroundCacheImpl(parser, cachePath, config);
+          } else if (type == ContentType::Txt && !cacheTask_.shouldStop()) {
+            const auto vp = getReaderViewport();
+            const auto config = coreRef.settings.getRenderConfig(theme, vp.width, vp.height);
+            std::string cachePath = contentCachePath(coreRef.content.cacheDir(), config.fontId);
+            PlainTextParser parser(contentPath_, renderer_, config);
+            backgroundCacheImpl(parser, cachePath, config);
+          }
+        }
 
-  // Memory barrier to ensure handle clear is visible to other cores (ESP32 dual-core)
-  std::atomic_thread_fence(std::memory_order_seq_cst);
+        // Generate thumbnail from cover for HomeState (lower priority than page cache)
+        if (!cacheTask_.shouldStop()) {
+          std::string coverPath = coreRef.content.getCoverPath();
+          std::string thumbPath = coreRef.content.getThumbnailPath();
+          if (!coverPath.empty() && !thumbPath.empty()) {
+            const char* logTag = "RDR";
+            switch (type) {
+              case ContentType::Epub:
+                logTag = "EPB";
+                break;
+              case ContentType::Txt:
+                logTag = "TXT";
+                break;
+              case ContentType::Markdown:
+                logTag = "MD ";
+                break;
+              default:
+                break;
+            }
+            if (!CoverHelpers::generateThumbFromCover(coverPath, thumbPath, logTag)) {
+              Serial.printf("[%s] Thumbnail generation failed\n", logTag);
+            }
+          }
+        }
 
-  vTaskDelete(nullptr);
+        if (!cacheTask_.shouldStop()) {
+          Serial.println("[READER] Background cache task completed");
+        } else {
+          Serial.println("[READER] Background cache task stopped");
+        }
+      },
+      0);  // priority 0 (idle)
 }
 
 void ReaderState::stopBackgroundCaching() {
-  TaskHandle_t taskToStop = cacheTaskHandle_;
-  if (!taskToStop) {
+  if (!cacheTask_.isRunning()) {
     return;
   }
 
-  Serial.println("[READER] Stopping background cache task");
-  cacheTaskStopRequested_.store(true, std::memory_order_release);
-
-  // Wait for task to clear cacheTaskHandle_ (it does this BEFORE vTaskDelete)
-  for (int i = 0; i < kTaskStopTimeoutMs / kTaskStopPollMs; i++) {
-    if (cacheTaskHandle_ == nullptr) {
-      Serial.println("[READER] Cache task stopped cleanly");
-      cacheTaskStopRequested_.store(false, std::memory_order_release);
-      return;
-    }
-    vTaskDelay(pdMS_TO_TICKS(kTaskStopPollMs));
+  // BackgroundTask::stop() uses event-based waiting (no polling)
+  // and NEVER force-deletes the task
+  if (!cacheTask_.stop(kCacheTaskStopTimeoutMs)) {
+    Serial.println("[READER] WARNING: Cache task did not stop within timeout");
+    Serial.println("[READER] Task may be blocked on SD card I/O");
   }
-
-  // Timeout - force delete
-  Serial.println("[READER] Cache task timeout - forcing delete");
-  vTaskDelete(taskToStop);
-  cacheTaskHandle_ = nullptr;
-  // Recreate mutex - it may be stuck from force-deleted task
-  vSemaphoreDelete(cacheMutex_);
-  cacheMutex_ = xSemaphoreCreateMutex();
-  if (!cacheMutex_) {
-    Serial.println("[READER] CRITICAL: Failed to recreate mutex");
-  }
-  cacheTaskStopRequested_.store(false, std::memory_order_release);
 }
 
 // ============================================================================
@@ -1114,13 +1033,11 @@ void ReaderState::jumpToTocEntry(Core& core, int tocIndex) {
   if (type == ContentType::Epub) {
     // For EPUB, pageNum is spine index
     if (static_cast<int>(chapter.pageNum) != currentSpineIndex_) {
+      stopBackgroundCaching();
       currentSpineIndex_ = chapter.pageNum;
       currentSectionPage_ = 0;
-      stopBackgroundCaching();
-      xSemaphoreTake(cacheMutex_, portMAX_DELAY);
       pageCache_.reset();
-      xSemaphoreGive(cacheMutex_);
-      cacheTaskComplete_.store(false, std::memory_order_relaxed);
+      startBackgroundCaching(core);
     }
   } else if (type == ContentType::Xtc) {
     // For XTC, pageNum is page index
@@ -1158,7 +1075,7 @@ void ReaderState::renderTocOverlay(Core& core) {
 void ReaderState::exitToUI(Core& core) {
   Serial.println("[READER] Exiting to UI mode via restart");
 
-  // Stop background caching first
+  // Stop background caching first - BackgroundTask::stop() waits properly
   stopBackgroundCaching();
 
   // Save progress at last rendered position
@@ -1169,13 +1086,8 @@ void ReaderState::exitToUI(Core& core) {
     progress.flatPage = currentPage_;
     ProgressManager::save(core, core.content.cacheDir(), core.content.metadata().type, progress);
 
-    // Close content - use timeout in case mutex is stuck from force-deleted task
-    if (xSemaphoreTake(cacheMutex_, pdMS_TO_TICKS(100)) == pdTRUE) {
-      pageCache_.reset();
-      xSemaphoreGive(cacheMutex_);
-    } else {
-      Serial.println("[READER] Warning: cacheMutex_ stuck, skipping cleanup");
-    }
+    // Safe to reset - task is stopped, we own pageCache_
+    pageCache_.reset();
     core.content.close();
   }
 
