@@ -19,7 +19,7 @@ constexpr int NUM_HEADER_TAGS = sizeof(HEADER_TAGS) / sizeof(HEADER_TAGS[0]);
 // Minimum file size (in bytes) to show progress bar - smaller chapters don't benefit from it
 constexpr size_t MIN_SIZE_FOR_PROGRESS = 50 * 1024;  // 50KB
 
-const char* BLOCK_TAGS[] = {"p", "li", "div", "br", "blockquote"};
+const char* BLOCK_TAGS[] = {"p", "li", "div", "br", "blockquote", "pre"};
 constexpr int NUM_BLOCK_TAGS = sizeof(BLOCK_TAGS) / sizeof(BLOCK_TAGS[0]);
 
 const char* BOLD_TAGS[] = {"b", "strong"};
@@ -251,6 +251,9 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
       const auto style = self->currentTextBlock ? self->currentTextBlock->getStyle()
                                                 : static_cast<TextBlock::BLOCK_STYLE>(self->config.paragraphAlignment);
       self->startNewTextBlock(style);
+    } else if (strcmp(name, "pre") == 0) {
+      // Preformatted blocks always use left alignment (code shouldn't be justified/centered)
+      self->startNewTextBlock(TextBlock::LEFT_ALIGN);
     } else {
       // Determine block style: CSS text-align takes precedence
       TextBlock::BLOCK_STYLE blockStyle = static_cast<TextBlock::BLOCK_STYLE>(self->config.paragraphAlignment);
