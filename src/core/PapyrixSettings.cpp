@@ -177,7 +177,8 @@ int Settings::getReaderFontId(const Theme& theme) const {
 
 RenderConfig Settings::getRenderConfig(const Theme& theme, uint16_t viewportWidth, uint16_t viewportHeight) const {
   return RenderConfig(getReaderFontId(theme), 0.95f, getIndentLevel(), getSpacingLevel(), paragraphAlignment,
-                      static_cast<bool>(hyphenation), static_cast<bool>(showImages), viewportWidth, viewportHeight);
+                      static_cast<bool>(hyphenation), static_cast<bool>(showImages), viewportWidth, viewportHeight,
+                      theme.monoFontId);
 }
 
 // Legacy methods that use SdMan directly (for early init before Core)

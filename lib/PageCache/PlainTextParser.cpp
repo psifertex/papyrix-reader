@@ -74,7 +74,7 @@ bool PlainTextParser::parsePages(const std::function<void(std::unique_ptr<Page>)
     if (!currentBlock || currentBlock->isEmpty()) return true;
 
     bool continueProcessing = true;
-    currentBlock->layoutAndExtractLines(renderer_, config_.fontId, config_.viewportWidth,
+    currentBlock->layoutAndExtractLines(renderer_, config_.fontId, config_.monoFontId, config_.viewportWidth,
                                         [&](const std::shared_ptr<TextBlock>& line) {
                                           if (!continueProcessing) return;
                                           if (!addLineToPage(line)) {

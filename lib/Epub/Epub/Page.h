@@ -20,7 +20,8 @@ class PageElement {
   explicit PageElement(const int16_t xPos, const int16_t yPos) : xPos(xPos), yPos(yPos) {}
   virtual ~PageElement() = default;
   virtual PageElementTag getTag() const = 0;
-  virtual void render(GfxRenderer& renderer, int fontId, int xOffset, int yOffset, bool black = true) = 0;
+  virtual void render(GfxRenderer& renderer, int fontId, int xOffset, int yOffset, bool black = true,
+                      int monoFontId = 0) = 0;
   virtual bool serialize(FsFile& file) = 0;
 };
 
@@ -32,7 +33,8 @@ class PageLine final : public PageElement {
   PageLine(std::shared_ptr<TextBlock> block, const int16_t xPos, const int16_t yPos)
       : PageElement(xPos, yPos), block(std::move(block)) {}
   PageElementTag getTag() const override { return TAG_PageLine; }
-  void render(GfxRenderer& renderer, int fontId, int xOffset, int yOffset, bool black = true) override;
+  void render(GfxRenderer& renderer, int fontId, int xOffset, int yOffset, bool black = true,
+              int monoFontId = 0) override;
   bool serialize(FsFile& file) override;
   static std::unique_ptr<PageLine> deserialize(FsFile& file);
 };
@@ -45,7 +47,8 @@ class PageImage final : public PageElement {
   PageImage(std::shared_ptr<ImageBlock> block, const int16_t xPos, const int16_t yPos)
       : PageElement(xPos, yPos), block(std::move(block)) {}
   PageElementTag getTag() const override { return TAG_PageImage; }
-  void render(GfxRenderer& renderer, int fontId, int xOffset, int yOffset, bool black = true) override;
+  void render(GfxRenderer& renderer, int fontId, int xOffset, int yOffset, bool black = true,
+              int monoFontId = 0) override;
   bool serialize(FsFile& file) override;
   static std::unique_ptr<PageImage> deserialize(FsFile& file);
 };
@@ -54,7 +57,8 @@ class Page {
  public:
   // the list of block index and line numbers on this page
   std::vector<std::shared_ptr<PageElement>> elements;
-  void render(GfxRenderer& renderer, int fontId, int xOffset, int yOffset, bool black = true) const;
+  void render(GfxRenderer& renderer, int fontId, int xOffset, int yOffset, bool black = true,
+              int monoFontId = 0) const;
   bool serialize(FsFile& file) const;
   static std::unique_ptr<Page> deserialize(FsFile& file);
 };

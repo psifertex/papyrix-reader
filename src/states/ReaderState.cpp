@@ -581,12 +581,12 @@ void ReaderState::renderCachedPage(Core& core) {
   if (core.settings.textAntiAliasing && renderer_.fontSupportsGrayscale(fontId) && renderer_.storeBwBuffer()) {
     renderer_.clearScreen(0x00);
     renderer_.setRenderMode(GfxRenderer::GRAYSCALE_LSB);
-    page->render(renderer_, fontId, vp.marginLeft, vp.marginTop, theme.primaryTextBlack);
+    page->render(renderer_, fontId, vp.marginLeft, vp.marginTop, theme.primaryTextBlack, theme.monoFontId);
     renderer_.copyGrayscaleLsbBuffers();
 
     renderer_.clearScreen(0x00);
     renderer_.setRenderMode(GfxRenderer::GRAYSCALE_MSB);
-    page->render(renderer_, fontId, vp.marginLeft, vp.marginTop, theme.primaryTextBlack);
+    page->render(renderer_, fontId, vp.marginLeft, vp.marginTop, theme.primaryTextBlack, theme.monoFontId);
     renderer_.copyGrayscaleMsbBuffers();
 
     const bool turnOffScreen = core.settings.sunlightFadingFix != 0;
@@ -700,7 +700,7 @@ void ReaderState::renderPageContents(Core& core, Page& page, int marginTop, int 
 
   const Theme& theme = THEME_MANAGER.current();
   const int fontId = core.settings.getReaderFontId(theme);
-  page.render(renderer_, fontId, marginLeft, marginTop, theme.primaryTextBlack);
+  page.render(renderer_, fontId, marginLeft, marginTop, theme.primaryTextBlack, theme.monoFontId);
 }
 
 void ReaderState::renderStatusBar(Core& core, int marginRight, int marginBottom, int marginLeft) {

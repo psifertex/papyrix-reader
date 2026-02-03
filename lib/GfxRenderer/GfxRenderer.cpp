@@ -93,8 +93,9 @@ int GfxRenderer::getTextWidth(const int fontId, const char* text, const EpdFontF
   int w = 0;
   if (ScriptDetector::containsThai(text)) {
     w = getThaiTextWidth(fontId, text, style);
-  } else if (_externalFont && _externalFont->isLoaded()) {
-    // Character-by-character calculation with external font fallback
+  } else {
+    // Always use advanceX sum for correct layout width calculation
+    // (getTextDimensions returns visual bounds which differs from advance width)
     const auto& font = fontMap.at(fontId);
     const char* ptr = text;
     uint32_t cp;
@@ -102,8 +103,8 @@ int GfxRenderer::getTextWidth(const int fontId, const char* text, const EpdFontF
       const EpdGlyph* glyph = font.getGlyph(cp, style);
       if (glyph) {
         w += glyph->advanceX;
-      } else {
-        // Try external font
+      } else if (_externalFont && _externalFont->isLoaded()) {
+        // Try external font for missing glyphs
         const int extWidth = getExternalGlyphWidth(cp);
         if (extWidth > 0) {
           w += extWidth;
@@ -114,11 +115,14 @@ int GfxRenderer::getTextWidth(const int fontId, const char* text, const EpdFontF
             w += fallback->advanceX;
           }
         }
+      } else {
+        // No external font, fall back to '?' glyph width
+        const EpdGlyph* fallback = font.getGlyph('?', style);
+        if (fallback) {
+          w += fallback->advanceX;
+        }
       }
     }
-  } else {
-    int h = 0;
-    fontMap.at(fontId).getTextDimensions(text, &w, &h, style);
   }
 
   // Limit cache size to prevent heap fragmentation

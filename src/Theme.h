@@ -50,6 +50,7 @@ struct Theme {
   int readerFontId;
   int readerFontIdMedium;
   int readerFontIdLarge;
+  int monoFontId;  // Monospace font for code blocks (0 = not loaded)
 
   // External font family names (empty = use builtin)
   char uiFontFamily[32];
@@ -84,6 +85,7 @@ inline Theme getBuiltinLightTheme() {
   theme.readerFontId = READER_FONT_ID;
   theme.readerFontIdMedium = READER_FONT_ID_MEDIUM;
   theme.readerFontIdLarge = READER_FONT_ID_LARGE;
+  theme.monoFontId = 0;  // Loaded dynamically if available
   theme.uiFontFamily[0] = '\0';
   theme.readerFontFamilySmall[0] = '\0';
   theme.readerFontFamilyMedium[0] = '\0';
@@ -115,6 +117,7 @@ inline Theme getBuiltinDarkTheme() {
   theme.readerFontId = READER_FONT_ID;
   theme.readerFontIdMedium = READER_FONT_ID_MEDIUM;
   theme.readerFontIdLarge = READER_FONT_ID_LARGE;
+  theme.monoFontId = 0;  // Loaded dynamically if available
   theme.uiFontFamily[0] = '\0';
   theme.readerFontFamilySmall[0] = '\0';
   theme.readerFontFamilyMedium[0] = '\0';

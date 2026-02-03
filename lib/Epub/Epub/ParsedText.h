@@ -25,6 +25,7 @@ class ParsedText {
   uint8_t indentLevel;
   bool hyphenationEnabled;
   bool useGreedyBreaking = true;  // Default to greedy to avoid Knuth-Plass memory spike
+  bool useMonospace = false;      // Use monospace font for this block (e.g., <pre>)
 
   std::vector<size_t> computeLineBreaks(int pageWidth, int spaceWidth, const std::vector<uint16_t>& wordWidths,
                                         const AbortCallback& shouldAbort = nullptr) const;
@@ -36,6 +37,8 @@ class ParsedText {
   std::vector<uint16_t> calculateWordWidths(const GfxRenderer& renderer, int fontId);
   bool preSplitOversizedWords(const GfxRenderer& renderer, int fontId, int pageWidth,
                               const AbortCallback& shouldAbort = nullptr);
+  bool hardWrapMonospaceLines(const GfxRenderer& renderer, int fontId, int pageWidth,
+                              const AbortCallback& shouldAbort = nullptr);
 
  public:
   explicit ParsedText(const TextBlock::BLOCK_STYLE style, const uint8_t indentLevel,
@@ -46,10 +49,11 @@ class ParsedText {
   void addWord(std::string word, EpdFontFamily::Style fontStyle);
   void setStyle(const TextBlock::BLOCK_STYLE style) { this->style = style; }
   void setUseGreedyBreaking(const bool greedy) { useGreedyBreaking = greedy; }
+  void setUseMonospace(const bool mono) { useMonospace = mono; }
   TextBlock::BLOCK_STYLE getStyle() const { return style; }
   size_t size() const { return words.size(); }
   bool isEmpty() const { return words.empty(); }
-  bool layoutAndExtractLines(const GfxRenderer& renderer, int fontId, uint16_t viewportWidth,
+  bool layoutAndExtractLines(const GfxRenderer& renderer, int fontId, int monoFontId, uint16_t viewportWidth,
                              const std::function<void(std::shared_ptr<TextBlock>)>& processLine,
                              bool includeLastLine = true, const AbortCallback& shouldAbort = nullptr);
 };

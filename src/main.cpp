@@ -248,6 +248,16 @@ void applyThemeFonts() {
       Serial.printf("[%lu] [FONT] Reader font: %s (ID: %d)\n", millis(), fontFamilyName, customFontId);
     }
   }
+
+  // Load monospace font for code blocks if available on SD card
+  // Expected path: /config/fonts/jetbrains-mono/regular.epdfont
+  theme.monoFontId = 0;
+  if (FONT_MANAGER.fontFamilyExists("jetbrains-mono")) {
+    int monoId = FONT_MANAGER.getFontId("jetbrains-mono", 0);
+    if (monoId != 0) {
+      theme.monoFontId = monoId;
+    }
+  }
 }
 
 void showErrorScreen(const char* message) {

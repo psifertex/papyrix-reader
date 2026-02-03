@@ -4,6 +4,7 @@
 
 struct RenderConfig {
   int fontId = 0;
+  int monoFontId = 0;  // Monospace font for code blocks (0 = use fontId)
   float lineCompression = 0.0f;
   uint8_t indentLevel = 0;
   uint8_t spacingLevel = 0;
@@ -15,8 +16,9 @@ struct RenderConfig {
 
   RenderConfig() = default;
   RenderConfig(int fontId, float lineCompression, uint8_t indentLevel, uint8_t spacingLevel, uint8_t paragraphAlignment,
-               bool hyphenation, bool showImages, uint16_t viewportWidth, uint16_t viewportHeight)
+               bool hyphenation, bool showImages, uint16_t viewportWidth, uint16_t viewportHeight, int monoFontId = 0)
       : fontId(fontId),
+        monoFontId(monoFontId),
         lineCompression(lineCompression),
         indentLevel(indentLevel),
         spacingLevel(spacingLevel),
@@ -27,10 +29,11 @@ struct RenderConfig {
         viewportHeight(viewportHeight) {}
 
   bool operator==(const RenderConfig& o) const {
-    return fontId == o.fontId && std::abs(lineCompression - o.lineCompression) < 1e-6f &&
-           indentLevel == o.indentLevel && spacingLevel == o.spacingLevel &&
-           paragraphAlignment == o.paragraphAlignment && hyphenation == o.hyphenation && showImages == o.showImages &&
-           viewportWidth == o.viewportWidth && viewportHeight == o.viewportHeight;
+    return fontId == o.fontId && monoFontId == o.monoFontId &&
+           std::abs(lineCompression - o.lineCompression) < 1e-6f && indentLevel == o.indentLevel &&
+           spacingLevel == o.spacingLevel && paragraphAlignment == o.paragraphAlignment &&
+           hyphenation == o.hyphenation && showImages == o.showImages && viewportWidth == o.viewportWidth &&
+           viewportHeight == o.viewportHeight;
   }
   bool operator!=(const RenderConfig& o) const { return !(*this == o); }
 };

@@ -82,7 +82,7 @@ void MarkdownParser::flushTextBlock(ParseContext& ctx) {
 
   const int lineHeight = static_cast<int>(renderer_.getLineHeight(config_.fontId) * config_.lineCompression);
 
-  ctx.textBlock->layoutAndExtractLines(renderer_, config_.fontId, config_.viewportWidth,
+  ctx.textBlock->layoutAndExtractLines(renderer_, config_.fontId, config_.monoFontId, config_.viewportWidth,
                                        [this, &ctx](const std::shared_ptr<TextBlock>& textBlock) {
                                          if (!ctx.hitMaxPages) {
                                            addLineToPage(ctx, textBlock);
@@ -412,7 +412,7 @@ bool MarkdownParser::parsePages(const std::function<void(std::unique_ptr<Page>)>
       if (freeBlock < 25000) {
         Serial.printf("[MD] Low memory (%zu free), flushing early\n", freeBlock);
         ctx.textBlock->layoutAndExtractLines(
-            renderer_, config_.fontId, config_.viewportWidth,
+            renderer_, config_.fontId, config_.monoFontId, config_.viewportWidth,
             [this, &ctx](const std::shared_ptr<TextBlock>& textBlock) {
               if (!ctx.hitMaxPages) {
                 addLineToPage(ctx, textBlock);

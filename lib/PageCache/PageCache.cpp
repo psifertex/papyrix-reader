@@ -7,7 +7,7 @@
 #include "ContentParser.h"
 
 namespace {
-constexpr uint8_t CACHE_FILE_VERSION = 16;  // v16: Fix MarkdownParser block reuse bug
+constexpr uint8_t CACHE_FILE_VERSION = 17;  // v17: Add monoFontId to cache validation
 
 // Header layout:
 // - version (1 byte)
@@ -32,6 +32,7 @@ bool PageCache::writeHeader(bool isPartial) {
   file_.seek(0);
   serialization::writePod(file_, CACHE_FILE_VERSION);
   serialization::writePod(file_, config_.fontId);
+  serialization::writePod(file_, config_.monoFontId);
   serialization::writePod(file_, config_.lineCompression);
   serialization::writePod(file_, config_.indentLevel);
   serialization::writePod(file_, config_.spacingLevel);
@@ -123,6 +124,7 @@ bool PageCache::load(const RenderConfig& config) {
 
   RenderConfig fileConfig;
   serialization::readPod(file_, fileConfig.fontId);
+  serialization::readPod(file_, fileConfig.monoFontId);
   serialization::readPod(file_, fileConfig.lineCompression);
   serialization::readPod(file_, fileConfig.indentLevel);
   serialization::readPod(file_, fileConfig.spacingLevel);

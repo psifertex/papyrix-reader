@@ -3,8 +3,9 @@
 #include <HardwareSerial.h>
 #include <Serialization.h>
 
-void PageLine::render(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset, const bool black) {
-  block->render(renderer, fontId, xPos + xOffset, yPos + yOffset, black);
+void PageLine::render(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset, const bool black,
+                      const int monoFontId) {
+  block->render(renderer, fontId, xPos + xOffset, yPos + yOffset, black, monoFontId);
 }
 
 bool PageLine::serialize(FsFile& file) {
@@ -30,8 +31,9 @@ std::unique_ptr<PageLine> PageLine::deserialize(FsFile& file) {
 }
 
 void PageImage::render(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset,
-                       const bool black) {
+                       const bool black, const int monoFontId) {
   (void)black;
+  (void)monoFontId;  // Images don't use fonts
   block->render(renderer, fontId, xPos + xOffset, yPos + yOffset);
 }
 
@@ -54,10 +56,10 @@ std::unique_ptr<PageImage> PageImage::deserialize(FsFile& file) {
   return std::unique_ptr<PageImage>(new PageImage(std::move(ib), xPos, yPos));
 }
 
-void Page::render(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset,
-                  const bool black) const {
+void Page::render(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset, const bool black,
+                  const int monoFontId) const {
   for (auto& element : elements) {
-    element->render(renderer, fontId, xOffset, yOffset, black);
+    element->render(renderer, fontId, xOffset, yOffset, black, monoFontId);
   }
 }
 

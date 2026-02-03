@@ -176,7 +176,8 @@ void ParsedText::addWord(std::string word, const EpdFontFamily::Style fontStyle)
 
 // Consumes data to minimize memory usage
 // Returns false if aborted, true otherwise
-bool ParsedText::layoutAndExtractLines(const GfxRenderer& renderer, const int fontId, const uint16_t viewportWidth,
+bool ParsedText::layoutAndExtractLines(const GfxRenderer& renderer, const int fontId, const int monoFontId,
+                                       const uint16_t viewportWidth,
                                        const std::function<void(std::shared_ptr<TextBlock>)>& processLine,
                                        const bool includeLastLine, const AbortCallback& shouldAbort) {
   if (words.empty()) {
@@ -188,17 +189,26 @@ bool ParsedText::layoutAndExtractLines(const GfxRenderer& renderer, const int fo
     return false;
   }
 
+  // Use monospace font for measurements if this is a monospace block
+  const int effectiveFontId = (useMonospace && monoFontId != 0) ? monoFontId : fontId;
+
   const int pageWidth = viewportWidth;
-  const int spaceWidth = renderer.getSpaceWidth(fontId);
+  // For monospace/pre blocks, spaces are embedded in words, so no inter-word spacing
+  const int spaceWidth = useMonospace ? 0 : renderer.getSpaceWidth(effectiveFontId);
 
   // Pre-split oversized words at soft hyphen positions
-  if (hyphenationEnabled) {
-    if (!preSplitOversizedWords(renderer, fontId, pageWidth, shouldAbort)) {
+  // For monospace blocks, use character-boundary hard wrapping instead
+  if (useMonospace) {
+    if (!hardWrapMonospaceLines(renderer, effectiveFontId, pageWidth, shouldAbort)) {
+      return false;  // Aborted
+    }
+  } else if (hyphenationEnabled) {
+    if (!preSplitOversizedWords(renderer, effectiveFontId, pageWidth, shouldAbort)) {
       return false;  // Aborted
     }
   }
 
-  const auto wordWidths = calculateWordWidths(renderer, fontId);
+  const auto wordWidths = calculateWordWidths(renderer, effectiveFontId);
   const auto lineBreakIndices = useGreedyBreaking
                                     ? computeLineBreaksGreedy(pageWidth, spaceWidth, wordWidths, shouldAbort)
                                     : computeLineBreaks(pageWidth, spaceWidth, wordWidths, shouldAbort);
@@ -227,7 +237,8 @@ std::vector<uint16_t> ParsedText::calculateWordWidths(const GfxRenderer& rendere
   wordWidths.reserve(totalWordCount);
 
   // Add indentation at the beginning of first word in paragraph
-  if (indentLevel > 0 && !words.empty()) {
+  // Skip for monospace/pre blocks which preserve exact whitespace
+  if (indentLevel > 0 && !words.empty() && !useMonospace) {
     std::string& first_word = words.front();
     switch (indentLevel) {
       case 2:  // Normal - em-space (U+2003)
@@ -342,6 +353,14 @@ std::vector<size_t> ParsedText::computeLineBreaksGreedy(const int pageWidth, con
     return breaks;
   }
 
+  // For monospace blocks, each "word" (chunk) is its own line - no combining
+  if (useMonospace) {
+    for (size_t i = 1; i <= n; i++) {
+      breaks.push_back(i);
+    }
+    return breaks;
+  }
+
   int lineWidth = -spaceWidth;  // First word won't have preceding space
   for (size_t i = 0; i < n; i++) {
     // Check for abort periodically (every 200 words)
@@ -415,7 +434,79 @@ void ParsedText::extractLine(const size_t breakIndex, const int pageWidth, const
   words.erase(words.begin(), wordIt);
   wordStyles.erase(wordStyles.begin(), styleIt);
 
-  processLine(std::make_shared<TextBlock>(std::move(lineData), style));
+  processLine(std::make_shared<TextBlock>(std::move(lineData), style, useMonospace));
+}
+
+bool ParsedText::hardWrapMonospaceLines(const GfxRenderer& renderer, const int fontId, const int pageWidth,
+                                        const AbortCallback& shouldAbort) {
+
+  std::list<std::string> newWords;
+  std::list<EpdFontFamily::Style> newStyles;
+
+  auto wordIt = words.begin();
+  auto styleIt = wordStyles.begin();
+  size_t wordCount = 0;
+
+  while (wordIt != words.end()) {
+    // Check for abort periodically
+    if (shouldAbort && (++wordCount % 50 == 0) && shouldAbort()) {
+      return false;
+    }
+
+    const std::string& line = *wordIt;
+    const EpdFontFamily::Style lineStyle = *styleIt;
+
+    // Measure the full line
+    const int lineWidth = renderer.getTextWidth(fontId, line.c_str(), lineStyle);
+
+    if (lineWidth <= pageWidth) {
+      // Line fits, keep as-is
+      newWords.push_back(line);
+      newStyles.push_back(lineStyle);
+    } else {
+      // Line too wide - split at character boundaries
+      std::string current;
+      int currentWidth = 0;
+      const unsigned char* p = reinterpret_cast<const unsigned char*>(line.c_str());
+      const unsigned char* lineEnd = p + line.size();
+
+      while (p < lineEnd) {
+        // Find the start and end of the next UTF-8 character
+        const unsigned char* charStart = p;
+        uint32_t cp = utf8NextCodepoint(&p);
+        if (cp == 0) break;
+
+        // Extract this character as a string
+        std::string charStr(reinterpret_cast<const char*>(charStart), p - charStart);
+        int charWidth = renderer.getTextWidth(fontId, charStr.c_str(), lineStyle);
+
+        // Would adding this character overflow?
+        if (currentWidth + charWidth > pageWidth && !current.empty()) {
+          // Emit current chunk and start new one
+          newWords.push_back(current);
+          newStyles.push_back(lineStyle);
+          current = charStr;
+          currentWidth = charWidth;
+        } else {
+          current += charStr;
+          currentWidth += charWidth;
+        }
+      }
+
+      // Emit remaining chunk
+      if (!current.empty()) {
+        newWords.push_back(current);
+        newStyles.push_back(lineStyle);
+      }
+    }
+
+    ++wordIt;
+    ++styleIt;
+  }
+
+  words = std::move(newWords);
+  wordStyles = std::move(newStyles);
+  return true;
 }
 
 bool ParsedText::preSplitOversizedWords(const GfxRenderer& renderer, const int fontId, const int pageWidth,

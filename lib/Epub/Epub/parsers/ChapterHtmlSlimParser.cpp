@@ -72,16 +72,21 @@ void ChapterHtmlSlimParser::flushPartWordBuffer() {
 
 // start a new text block if needed
 void ChapterHtmlSlimParser::startNewTextBlock(const TextBlock::BLOCK_STYLE style) {
+  // Use <= because when called from startElement, depth hasn't been incremented yet
+  const bool inPreBlock = preUntilDepth <= depth;
+
   if (currentTextBlock) {
     // already have a text block running and it is empty - just reuse it
     if (currentTextBlock->isEmpty()) {
       currentTextBlock->setStyle(style);
+      currentTextBlock->setUseMonospace(inPreBlock);
       return;
     }
 
     makePages();
   }
   currentTextBlock.reset(new ParsedText(style, config.indentLevel, config.hyphenation));
+  currentTextBlock->setUseMonospace(inPreBlock);
 }
 
 void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char* name, const XML_Char** atts) {
@@ -252,7 +257,9 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
                                                 : static_cast<TextBlock::BLOCK_STYLE>(self->config.paragraphAlignment);
       self->startNewTextBlock(style);
     } else if (strcmp(name, "pre") == 0) {
-      // Preformatted blocks always use left alignment (code shouldn't be justified/centered)
+      // Preformatted blocks: left alignment and preserve whitespace
+      // Set preUntilDepth BEFORE startNewTextBlock so inPreBlock check works
+      self->preUntilDepth = min(self->preUntilDepth, self->depth);
       self->startNewTextBlock(TextBlock::LEFT_ALIGN);
     } else {
       // Determine block style: CSS text-align takes precedence
@@ -299,9 +306,38 @@ void XMLCALL ChapterHtmlSlimParser::characterData(void* userData, const XML_Char
   const XML_Char FEFF_BYTE_2 = static_cast<XML_Char>(0xBB);
   const XML_Char FEFF_BYTE_3 = static_cast<XML_Char>(0xBF);
 
+  const bool inPreBlock = self->preUntilDepth < self->depth;
+
   for (int i = 0; i < len; i++) {
     if (isWhitespace(s[i])) {
-      // Currently looking at whitespace, if there's anything in the partWordBuffer, flush it
+      if (inPreBlock) {
+        // In <pre> blocks, preserve whitespace formatting
+        if (s[i] == '\n') {
+          // Newline: flush current word and start a new line
+          if (self->partWordBufferIndex > 0) {
+            self->flushPartWordBuffer();
+          }
+          self->startNewTextBlock(TextBlock::LEFT_ALIGN);
+          continue;
+        }
+        // Tabs: convert to 2 spaces
+        if (s[i] == '\t') {
+          for (int t = 0; t < 2; t++) {
+            if (self->partWordBufferIndex >= MAX_WORD_SIZE) {
+              self->flushPartWordBuffer();
+            }
+            self->partWordBuffer[self->partWordBufferIndex++] = ' ';
+          }
+          continue;
+        }
+        // Other whitespace (space, etc.): add to word buffer to preserve spacing
+        if (self->partWordBufferIndex >= MAX_WORD_SIZE) {
+          self->flushPartWordBuffer();
+        }
+        self->partWordBuffer[self->partWordBufferIndex++] = ' ';
+        continue;
+      }
+      // Normal text: flush word on whitespace
       if (self->partWordBufferIndex > 0) {
         self->flushPartWordBuffer();
       }
@@ -334,7 +370,7 @@ void XMLCALL ChapterHtmlSlimParser::characterData(void* userData, const XML_Char
   if (self->currentTextBlock && self->currentTextBlock->size() > 750) {
     Serial.printf("[%lu] [EHP] Text block too long, splitting into multiple pages\n", millis());
     self->currentTextBlock->layoutAndExtractLines(
-        self->renderer, self->config.fontId, self->config.viewportWidth,
+        self->renderer, self->config.fontId, self->config.monoFontId, self->config.viewportWidth,
         [self](const std::shared_ptr<TextBlock>& textBlock) { self->addLineToPage(textBlock); }, false);
   }
 }
@@ -373,6 +409,9 @@ void XMLCALL ChapterHtmlSlimParser::endElement(void* userData, const XML_Char* n
   }
   if (self->cssItalicUntilDepth == self->depth) {
     self->cssItalicUntilDepth = INT_MAX;
+  }
+  if (self->preUntilDepth == self->depth) {
+    self->preUntilDepth = INT_MAX;
   }
 }
 
@@ -551,7 +590,7 @@ void ChapterHtmlSlimParser::makePages() {
 
   const int lineHeight = renderer.getLineHeight(config.fontId) * config.lineCompression;
   currentTextBlock->layoutAndExtractLines(
-      renderer, config.fontId, config.viewportWidth,
+      renderer, config.fontId, config.monoFontId, config.viewportWidth,
       [this](const std::shared_ptr<TextBlock>& textBlock) { addLineToPage(textBlock); });
   // Extra paragraph spacing based on spacingLevel (0=none, 1=small, 3=large)
   switch (config.spacingLevel) {

@@ -31,6 +31,7 @@ class ChapterHtmlSlimParser {
   int italicUntilDepth = INT_MAX;
   int cssBoldUntilDepth = INT_MAX;
   int cssItalicUntilDepth = INT_MAX;
+  int preUntilDepth = INT_MAX;  // Track when inside <pre> for whitespace preservation
   // buffer for building up words from characters, will auto break if longer than this
   // leave one char at end for null pointer
   char partWordBuffer[MAX_WORD_SIZE + 1] = {};
