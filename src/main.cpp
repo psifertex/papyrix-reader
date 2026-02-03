@@ -120,10 +120,14 @@ EpdFontFamily uiFontFamily(&ui12Font, &uiBold12Font);
 
 bool isUsbConnected() { return digitalRead(UART0_RXD) == HIGH; }
 
-bool isWakeupAfterFlashing() {
+bool isWakeupByPowerButton() {
   const auto wakeupCause = esp_sleep_get_wakeup_cause();
   const auto resetReason = esp_reset_reason();
-  return isUsbConnected() && (wakeupCause == ESP_SLEEP_WAKEUP_UNDEFINED) && (resetReason == ESP_RST_UNKNOWN);
+  if (isUsbConnected()) {
+    return wakeupCause == ESP_SLEEP_WAKEUP_GPIO;
+  } else {
+    return (wakeupCause == ESP_SLEEP_WAKEUP_UNDEFINED) && (resetReason == ESP_RST_POWERON);
+  }
 }
 
 // Verify long press on wake-up from deep sleep
@@ -271,7 +275,7 @@ bool earlyInit() {
   }
 
   inputManager.begin();
-  if (!isWakeupAfterFlashing()) {
+  if (isWakeupByPowerButton()) {
     verifyWakeupLongPress();
   }
 
