@@ -271,12 +271,14 @@ void FileListState::render(Core& core) {
     return;
   }
 
+  // Clear flag at START of render (Crosspoint pattern)
+  needsRender_ = false;
+
   Theme& theme = THEME_MANAGER.mutableCurrent();
 
   if (currentScreen_ == Screen::ConfirmDelete) {
     ui::render(renderer_, theme, confirmView_);
     confirmView_.needsRender = false;
-    needsRender_ = false;
     core.display.markDirty();
     return;
   }
@@ -296,7 +298,6 @@ void FileListState::render(Core& core) {
   if (files_.empty()) {
     renderer_.drawText(theme.uiFontId, 20, 60, "No books found", theme.primaryTextBlack);
     renderer_.displayBuffer();
-    needsRender_ = false;
     core.display.markDirty();
     return;
   }
@@ -324,7 +325,6 @@ void FileListState::render(Core& core) {
   } else {
     renderer_.displayBuffer();
   }
-  needsRender_ = false;
   core.display.markDirty();
 }
 

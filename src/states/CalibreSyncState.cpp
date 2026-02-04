@@ -177,9 +177,11 @@ StateTransition CalibreSyncState::update(Core& core) {
 void CalibreSyncState::render(Core& core) {
   if (!needsRender_ && !calibreView_.needsRender) return;
 
+  // Clear state-level flag at START of render (Crosspoint pattern)
+  needsRender_ = false;
+
   ui::render(renderer_, THEME, calibreView_);
   calibreView_.needsRender = false;
-  needsRender_ = false;
   core.display.markDirty();
 }
 

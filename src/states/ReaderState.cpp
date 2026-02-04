@@ -8,6 +8,7 @@
 #include <MarkdownParser.h>
 #include <PageCache.h>
 #include <PlainTextParser.h>
+#include <ScopedMutex.h>
 #include <esp_system.h>
 
 #include <cstring>
@@ -350,6 +351,10 @@ void ReaderState::render(Core& core) {
     return;
   }
 
+  // Clear flag at START of render (Crosspoint pattern)
+  // If input arrives during render, flag will be set true again
+  needsRender_ = false;
+
   if (tocMode_) {
     renderTocOverlay(core);
   } else {
@@ -358,8 +363,6 @@ void ReaderState::render(Core& core) {
     lastRenderedSpineIndex_ = currentSpineIndex_;
     lastRenderedSectionPage_ = currentSectionPage_;
   }
-
-  needsRender_ = false;
 }
 
 void ReaderState::navigateNext(Core& core) {
@@ -375,12 +378,16 @@ void ReaderState::navigateNext(Core& core) {
     }
     int firstContentSpine = calcFirstContentSpine(hasCover_, textStartIndex_, spineCount);
 
-    if (firstContentSpine != currentSpineIndex_) {
-      currentSpineIndex_ = firstContentSpine;
-      pageCache_.reset();
+    // Take mutex for state modification (synchronize with display task)
+    {
+      ScopedMutex lock(core.renderMutex);
+      if (firstContentSpine != currentSpineIndex_) {
+        currentSpineIndex_ = firstContentSpine;
+        pageCache_.reset();
+      }
+      currentSectionPage_ = 0;
+      needsRender_ = true;
     }
-    currentSectionPage_ = 0;
-    needsRender_ = true;
     startBackgroundCaching(core);
     return;
   }
@@ -409,6 +416,8 @@ void ReaderState::navigatePrev(Core& core) {
   if (currentSpineIndex_ == firstContentSpine && currentSectionPage_ == 0) {
     // Only go to cover if it exists and images enabled
     if (hasCover_ && core.settings.showImages) {
+      // Take mutex for state modification (synchronize with display task)
+      ScopedMutex lock(core.renderMutex);
       currentSpineIndex_ = 0;
       currentSectionPage_ = -1;
       pageCache_.reset();  // Don't need cache for cover
@@ -433,12 +442,17 @@ void ReaderState::navigatePrev(Core& core) {
 }
 
 void ReaderState::applyNavResult(const ReaderNavigation::NavResult& result, Core& core) {
-  currentSpineIndex_ = result.position.spineIndex;
-  currentSectionPage_ = result.position.sectionPage;
-  currentPage_ = result.position.flatPage;
-  needsRender_ = result.needsRender;
-  if (result.needsCacheReset) {
-    pageCache_.reset();  // Safe - task already stopped by caller
+  // Take mutex for state modification (synchronize with display task)
+  // Cache task already stopped by caller, so we're safe to modify pageCache_
+  {
+    ScopedMutex lock(core.renderMutex);
+    currentSpineIndex_ = result.position.spineIndex;
+    currentSectionPage_ = result.position.sectionPage;
+    currentPage_ = result.position.flatPage;
+    needsRender_ = result.needsRender;
+    if (result.needsCacheReset) {
+      pageCache_.reset();
+    }
   }
   startBackgroundCaching(core);  // Resume caching
 }
@@ -552,7 +566,6 @@ void ReaderState::renderCachedPage(Core& core) {
     renderer_.drawCenteredText(core.settings.getReaderFontId(theme), 300, "Failed to load page", theme.primaryTextBlack,
                                BOLD);
     renderer_.displayBuffer();
-    needsRender_ = false;  // Prevent infinite render loop on cache failure
     return;
   }
 
@@ -1034,17 +1047,25 @@ void ReaderState::jumpToTocEntry(Core& core, int tocIndex) {
     // For EPUB, pageNum is spine index
     if (static_cast<int>(chapter.pageNum) != currentSpineIndex_) {
       stopBackgroundCaching();
-      currentSpineIndex_ = chapter.pageNum;
-      currentSectionPage_ = 0;
-      pageCache_.reset();
+      // Take mutex for state modification (synchronize with display task)
+      {
+        ScopedMutex lock(core.renderMutex);
+        currentSpineIndex_ = chapter.pageNum;
+        currentSectionPage_ = 0;
+        pageCache_.reset();
+        needsRender_ = true;
+      }
       startBackgroundCaching(core);
+    } else {
+      needsRender_ = true;
     }
   } else if (type == ContentType::Xtc) {
     // For XTC, pageNum is page index
+    ScopedMutex lock(core.renderMutex);
     currentPage_ = chapter.pageNum;
+    needsRender_ = true;
   }
 
-  needsRender_ = true;
   Serial.printf("[READER] Jumped to TOC entry %d (spine/page %d)\n", tocIndex, chapter.pageNum);
 }
 

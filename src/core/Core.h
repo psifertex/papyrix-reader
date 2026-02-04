@@ -1,5 +1,8 @@
 #pragma once
 
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
+
 #include "../content/ContentHandle.h"
 #include "../drivers/Display.h"
 #include "../drivers/Input.h"
@@ -37,6 +40,10 @@ struct Core {
 
   // === Pending operations ===
   SyncMode pendingSync = SyncMode::None;
+
+  // === Render synchronization ===
+  // Set by StateMachine, used by states to synchronize with display task
+  SemaphoreHandle_t renderMutex = nullptr;
 
   // === Lifecycle ===
   Result<void> init();

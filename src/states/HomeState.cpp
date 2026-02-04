@@ -156,6 +156,9 @@ void HomeState::render(Core& core) {
     return;
   }
 
+  // Clear flag at START of render (Crosspoint pattern)
+  view_.needsRender = false;
+
   const Theme& theme = THEME;
 
   // If we have a stored compressed thumbnail, restore it instead of re-reading from SD
@@ -188,7 +191,6 @@ void HomeState::render(Core& core) {
   ui::render(renderer_, theme, view_);
 
   renderer_.displayBuffer();
-  view_.needsRender = false;
   core.display.markDirty();
 }
 

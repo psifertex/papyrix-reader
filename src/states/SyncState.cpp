@@ -81,9 +81,11 @@ void SyncState::render(Core& core) {
     return;
   }
 
+  // Clear state-level flag at START of render (Crosspoint pattern)
+  needsRender_ = false;
+
   ui::render(renderer_, THEME, menuView_);
   menuView_.needsRender = false;
-  needsRender_ = false;
   core.display.markDirty();
 }
 

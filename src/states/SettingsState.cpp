@@ -225,6 +225,9 @@ void SettingsState::render(Core& core) {
     }
   }
 
+  // Clear state-level flag at START of render (Crosspoint pattern)
+  needsRender_ = false;
+
   switch (currentScreen_) {
     case SettingsScreen::Menu:
       ui::render(renderer_, THEME, menuView_);
@@ -252,7 +255,6 @@ void SettingsState::render(Core& core) {
       break;
   }
 
-  needsRender_ = false;
   core.display.markDirty();
 }
 

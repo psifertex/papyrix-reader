@@ -153,6 +153,9 @@ void NetworkState::render(Core& core) {
     if (!viewNeedsRender) return;
   }
 
+  // Clear state-level flag at START of render (Crosspoint pattern)
+  needsRender_ = false;
+
   switch (currentScreen_) {
     case NetworkScreen::ModeSelect:
       ui::render(renderer_, THEME, modeView_);
@@ -180,7 +183,6 @@ void NetworkState::render(Core& core) {
       break;
   }
 
-  needsRender_ = false;
   core.display.markDirty();
 }
 

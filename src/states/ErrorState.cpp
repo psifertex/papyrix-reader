@@ -55,6 +55,9 @@ void ErrorState::render(Core& core) {
     return;
   }
 
+  // Clear flag at START of render (Crosspoint pattern)
+  needsRender_ = false;
+
   const Theme& theme = THEME_MANAGER.current();
 
   renderer_.clearScreen(theme.backgroundColor);
@@ -69,7 +72,6 @@ void ErrorState::render(Core& core) {
   renderer_.drawCenteredText(theme.uiFontId, 350, "Press any button to continue", theme.primaryTextBlack, REGULAR);
 
   renderer_.displayBuffer();
-  needsRender_ = false;
   core.display.markDirty();
 }
 
